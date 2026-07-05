@@ -21,6 +21,7 @@
  */
 
 const admin = require('firebase-admin');
+const webpush = require('web-push');
 
 /* ── 1. Initialisation Firebase Admin ─────────────────────── */
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -33,6 +34,36 @@ const serviceAccount = JSON.parse(
 );
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
+
+/* ── 1bis. Config Web Push (VAPID — gratuit, aucun service tiers payant) ── */
+// Clé publique = doit correspondre EXACTEMENT à VAPID_PUBLIC_KEY dans index.html
+const VAPID_PUBLIC_KEY  = process.env.VAPID_PUBLIC_KEY  || 'BLfoZSEyZ4pplPuud3s9AW01NJBVCxIWVCquVqykyGVSZ5yzbrN_ylQaqDxmwSHGx324d6nWcJrm9p2zQ5SSyZA';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || null;
+if (VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails('mailto:commission.temoignage.fes@example.org', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+} else {
+  console.warn('⚠️ VAPID_PRIVATE_KEY absente — notifications push (téléphone) ignorées, seuls la notif interne et l\'email partiront.');
+}
+
+/* Envoie une vraie notification push (bannière téléphone/PC) à un évangéliste,
+   s'il a activé les notifications sur au moins un appareil. */
+async function sendPush(evId, title, body) {
+  if (!VAPID_PRIVATE_KEY) return;
+  const doc = await db.collection('push_subscriptions').doc(evId).get();
+  if (!doc.exists) return; // n'a pas activé les notifications
+  const sub = doc.data().subscription;
+  if (!sub) return;
+  try {
+    await webpush.sendNotification(sub, JSON.stringify({ title, body }));
+  } catch (e) {
+    if (e.statusCode === 404 || e.statusCode === 410) {
+      // Abonnement expiré/révoqué (désinstallation, changement navigateur…) → on nettoie
+      await db.collection('push_subscriptions').doc(evId).delete().catch(() => {});
+    } else {
+      console.warn(`⚠️ Push non délivré pour ${evId} :`, e.statusCode || e.message);
+    }
+  }
+}
 
 /* ── 2. Config EmailJS (mêmes identifiants que l'app) ─────── */
 const EJS = {
@@ -112,11 +143,11 @@ async function runRappelHebdo(now) {
     await ref.set({ evId: ev.id, cle, createdAt: admin.firestore.FieldValue.serverTimestamp(), source: 'server' });
 
     const mesFiches = fiches.filter(f => f.evangelisteId === ev.id);
-    await pushNotif(ev.id,
-      mesFiches.length
-        ? `📞 Rappel : contactez vos ${mesFiches.length} fiche(s) d'ici lundi.`
-        : `📞 Rappel bi-mensuel : pensez à prendre des nouvelles de vos personnes suivies d'ici lundi.`,
-      'rappel-hebdo');
+    const msgHebdo = mesFiches.length
+      ? `📞 Rappel : contactez vos ${mesFiches.length} fiche(s) d'ici lundi.`
+      : `📞 Rappel bi-mensuel : pensez à prendre des nouvelles de vos personnes suivies d'ici lundi.`;
+    await pushNotif(ev.id, msgHebdo, 'rappel-hebdo');
+    await sendPush(ev.id, 'Commission Témoignage', msgHebdo);
 
     if (ev.email && mesFiches.length) {
       const v = versets[0];
@@ -159,9 +190,9 @@ async function runRappelVisiteMensuelle(now) {
       ? collegues.map(e => e.nom).join(', ')
       : 'aucun signalé pour l\'instant — voir avec la responsable de zone';
 
-    await pushNotif(ev.id,
-      `🚶 Ce mois-ci : programmez une visite pour vos ${mesFiches.length} fiche(s), accompagné(e) de : ${nomsCollegues}.`,
-      'rappel-visite-mois');
+    const msgVisite = `🚶 Ce mois-ci : programmez une visite pour vos ${mesFiches.length} fiche(s), accompagné(e) de : ${nomsCollegues}.`;
+    await pushNotif(ev.id, msgVisite, 'rappel-visite-mois');
+    await sendPush(ev.id, 'Commission Témoignage', msgVisite);
 
     if (ev.email) {
       const v = versets[1];
@@ -177,11 +208,49 @@ async function runRappelVisiteMensuelle(now) {
   }
 }
 
+/* ── 6. Sorties collectives de la commission ──────────────
+   Contrairement aux rappels planifiés, ceci se déclenche dès
+   qu'une nouvelle sortie est publiée par le/la responsable
+   (champ notifie:false). Comme il n'y a pas de serveur en
+   permanence (juste ce cron), la notification part au run
+   suivant — d'où l'intérêt, en phase de test, d'un cron
+   fréquent (voir reminders.yml).                            */
+async function runSortiesCollectives() {
+  const snap = await db.collection('sorties_collectives').where('notifie', '==', false).get();
+  if (snap.empty) return;
+
+  const evsSnap = await db.collection('evangelistes').where('actif', '!=', false).get();
+  const evs = evsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  for (const doc of snap.docs) {
+    const s = doc.data();
+    const dateLabel = new Date(s.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const msg = `🚌 Sortie collective de la commission : ${s.lieu} — ${dateLabel}${s.description ? ' (' + s.description + ')' : ''}. Merci d'indiquer votre présence dans l'app.`;
+
+    for (const ev of evs) {
+      await pushNotif(ev.id, msg, 'sortie-collective');
+      await sendPush(ev.id, 'Sortie collective — Commission Témoignage', msg);
+      if (ev.email) {
+        await sendEmail({
+          to_email: ev.email, ev_nom: ev.nom,
+          fiche_nom: '—',
+          action: `Sortie collective le ${dateLabel} à ${s.lieu}${s.description ? ' — ' + s.description : ''}. Merci de répondre dans l'app (Je viens / Je ne peux pas).`,
+          action_date: s.date,
+          verset: versets[1].txt, verset_ref: versets[1].ref,
+        });
+      }
+    }
+    await doc.ref.update({ notifie: true, notifieAt: admin.firestore.FieldValue.serverTimestamp() });
+    console.log(`✔ Sortie collective "${s.lieu}" notifiée à ${evs.length} évangéliste(s)`);
+  }
+}
+
 (async () => {
   const now = new Date();
   console.log('▶ Vérification des rappels —', now.toISOString());
   await runRappelHebdo(now);
   await runRappelVisiteMensuelle(now);
+  await runSortiesCollectives();
   console.log('✔ Terminé.');
   process.exit(0);
 })().catch(err => {
