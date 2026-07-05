@@ -1956,6 +1956,27 @@ body .animate, body .spinner, body [class*="anim"] {
 
     <!-- TAB SORTIES D'ÉVANGÉLISATION -->
     <div class="tabcontent" id="tab-sorties">
+
+      <!-- Programmer une sortie collective (toute la commission) -->
+      <div class="card" style="padding:18px;margin-bottom:14px;border:1.5px solid var(--c1);">
+        <div class="chart-title" style="margin-bottom:4px;">📢 Programmer une sortie collective (toute la commission)</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Annonce envoyée à tous les évangélistes (notification + email). Ils pourront répondre "Je viens" / "Je ne peux pas" avec motif.</div>
+        <div class="edit-field-row">
+          <div class="edit-field"><label>Date</label><input type="date" id="sc-date" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
+          <div class="edit-field"><label>Lieu</label><input type="text" id="sc-lieu" placeholder="ex: Zone Bensouda" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
+        </div>
+        <div class="edit-field" style="margin-top:10px;"><label>Description (optionnel)</label><textarea id="sc-desc" rows="2" placeholder="Détails, point de rendez-vous, horaire…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);resize:vertical;"></textarea></div>
+        <button class="btn btn-primary btn-full" id="sc-save-btn" onclick="creerSortieCollective()" style="margin-top:12px;">📢 Publier et notifier tous les évangélistes</button>
+      </div>
+
+      <!-- Suivi des réponses -->
+      <div class="card" style="padding:18px;margin-bottom:18px;">
+        <div class="chart-title" style="margin-bottom:10px;">Sorties collectives programmées & réponses</div>
+        <div id="sorties-collectives-list">
+          <div class="empty-state"><div class="ico">🚌</div><p>Aucune sortie collective programmée</p></div>
+        </div>
+      </div>
+
       <!-- Formulaire nouvelle sortie -->
       <div class="card" style="padding:18px;margin-bottom:14px;">
         <div class="chart-title" style="margin-bottom:14px;">➕ Enregistrer une sortie d'évangélisation</div>
@@ -2405,12 +2426,22 @@ body .animate, body .spinner, body [class*="anim"] {
           <div style="font-size:12px;font-weight:700;color:var(--c1);text-transform:uppercase;letter-spacing:.06em;">🤝 Disponible pour accompagner une visite</div>
           <div style="font-size:11.5px;color:var(--mu);margin-top:2px;line-height:1.4;">Visible par les évangélistes de votre zone pour organiser les visites mensuelles avec accompagnateur.</div>
         </div>
-        <label style="position:relative;display:inline-block;width:46px;height:26px;flex-shrink:0;">
-          <input type="checkbox" id="ev-dispo-toggle" onchange="toggleMaDisponibilite(this.checked)" style="opacity:0;width:0;height:0;">
-          <span id="ev-dispo-slider" style="position:absolute;cursor:pointer;inset:0;background:var(--bo);border-radius:26px;transition:.2s;" onclick="document.getElementById('ev-dispo-toggle').click()"></span>
+        <button type="button" id="ev-dispo-btn" onclick="toggleMaDisponibilite()" style="position:relative;display:inline-block;width:46px;height:26px;flex-shrink:0;border:none;padding:0;border-radius:26px;background:var(--bo);cursor:pointer;transition:.2s;">
           <span id="ev-dispo-knob" style="position:absolute;left:3px;top:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.3);pointer-events:none;"></span>
-        </label>
+        </button>
       </div>
+
+      <!-- Notifications téléphone -->
+      <div id="ev-push-card" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:14px;padding:14px 16px;margin-bottom:14px;display:none;align-items:center;justify-content:space-between;gap:12px;">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--c1);text-transform:uppercase;letter-spacing:.06em;">🔔 Notifications sur ce téléphone</div>
+          <div style="font-size:11.5px;color:var(--mu);margin-top:2px;line-height:1.4;">Recevez les rappels et annonces même app fermée.</div>
+        </div>
+        <button type="button" class="btn btn-primary" id="ev-push-btn" onclick="activerPushNotif()">Activer</button>
+      </div>
+
+      <!-- Sorties collectives de la commission -->
+      <div id="ev-sorties-collectives-bloc" style="margin-bottom:16px;"></div>
 
       <!-- Bandeau date du jour -->
       <div id="ev-agenda-header" style="background:linear-gradient(135deg,var(--c1),var(--c2));border-radius:16px;padding:16px 20px;margin-bottom:16px;color:#fff;display:flex;align-items:center;justify-content:space-between;">
@@ -2499,6 +2530,81 @@ const db = firebase.firestore();
 db.enablePersistence({ synchronizeTabs: true }).catch(e => {
   console.warn('Persistance offline:', e.code);
 });
+
+/* ══════════════════════════════════════════════════
+   NOTIFICATIONS PUSH (Web Push — 100% gratuit)
+   VERSION TEST — clé publique VAPID (non secrète)
+═══════════════════════════════════════════════════ */
+const VAPID_PUBLIC_KEY = 'BLfoZSEyZ4pplPuud3s9AW01NJBVCxIWVCquVqykyGVSZ5yzbrN_ylQaqDxmwSHGx324d6nWcJrm9p2zQ5SSyZA';
+
+function _urlB64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+function pushSupporte() {
+  return ('serviceWorker' in navigator) && ('PushManager' in window) && (typeof Notification !== 'undefined');
+}
+
+/* Vérifie l'état actuel et affiche/masque la carte "Activer les notifications" */
+async function checkPushStatus() {
+  const card = document.getElementById('ev-push-card');
+  if (!card) return;
+  if (!pushSupporte()) { card.style.display = 'none'; return; }
+  if (Notification.permission === 'granted') {
+    // Déjà autorisé : on vérifie qu'un abonnement existe bien, sinon on le (re)crée silencieusement
+    card.style.display = 'none';
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) await activerPushNotif(true);
+    } catch(e) { console.warn('checkPushStatus:', e); }
+  } else if (Notification.permission === 'denied') {
+    card.style.display = 'none'; // bloqué au niveau navigateur, rien à faire depuis l'app
+  } else {
+    card.style.display = 'flex';
+  }
+}
+
+/* Demande la permission + crée l'abonnement + le sauvegarde dans Firestore */
+async function activerPushNotif(silencieux) {
+  if (!pushSupporte()) { if (!silencieux) toast('❌ Notifications non supportées sur ce navigateur'); return; }
+  if (!S.evId) { if (!silencieux) toast('❌ Session non identifiée'); return; }
+  const btn = document.getElementById('ev-push-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Activation...'; }
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      if (!silencieux) toast('⏸️ Notifications refusées — vous pouvez les activer plus tard dans les réglages du navigateur');
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: _urlB64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    await db.collection('push_subscriptions').doc(S.evId).set({
+      evangelisteId: S.evId,
+      subscription:  JSON.parse(JSON.stringify(sub)),
+      updatedAt:     firebase.firestore.FieldValue.serverTimestamp()
+    });
+    if (!silencieux) toast('✅ Notifications activées sur cet appareil');
+    const card = document.getElementById('ev-push-card');
+    if (card) card.style.display = 'none';
+  } catch(e) {
+    console.error('activerPushNotif:', e);
+    if (!silencieux) toast('❌ Erreur activation notifications — ' + (e.message || e.code || ''));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Activer'; }
+  }
+}
 
 /* ── SAUVEGARDE FICHE ────────────────────────────── */
 window._addFiche = (data) => {
@@ -2778,6 +2884,37 @@ window._deleteSortie = (id) => {
   return db.collection('sorties').doc(id).delete();
 };
 
+/* ── SORTIES COLLECTIVES DE LA COMMISSION (programmées par le/la responsable) ── */
+window._createSortieCollective = (data) => {
+  return db.collection('sorties_collectives').add({
+    ...data,
+    reponses:  {},
+    notifie:   false,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+};
+window._listenSortiesCollectives = (cb) => {
+  return db.collection('sorties_collectives')
+    .orderBy('date', 'desc')
+    .limit(30)
+    .onSnapshot(
+      snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      () => {}
+    );
+};
+window._repondreSortieCollective = (sortieId, evId, statut, motif) => {
+  const upd = {};
+  upd['reponses.' + evId] = {
+    statut,
+    motif:     motif || null,
+    repondule: firebase.firestore.Timestamp.now()
+  };
+  return db.collection('sorties_collectives').doc(sortieId).update(upd);
+};
+window._deleteSortieCollective = (id) => {
+  return db.collection('sorties_collectives').doc(id).delete();
+};
+
 window._FB_READY = true;
 console.log('✅ Firebase prêt');
 
@@ -2842,6 +2979,7 @@ const S = {
   evs:      [],
   myFiches: [],
   sorties:  [],
+  sortiesCollectives: [],
   activities: [],
   notifs:   [],
   zones:    [],
@@ -2885,6 +3023,8 @@ if (!navigator.onLine) document.getElementById('offbar').classList.add('show');
 /* ════════════════════════════════════════════════
    TOAST
 ════════════════════════════════════════════════ */
+function _esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
 function toast(msg, dur = 3000) {
   const t = document.getElementById('toast');
   // Détecter le type par l'emoji initial
@@ -4413,6 +4553,12 @@ function initEvSpace() {
       if (actsTab && actsTab.style.display !== 'none') renderEvMyActs();
     });
   }
+
+  // Sorties collectives de la commission
+  initSortiesCollectives();
+
+  // Notifications push : vérifier l'état à l'ouverture de l'espace
+  checkPushStatus();
 }
 
 
@@ -5185,6 +5331,108 @@ function initSorties() {
   if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
 }
 
+/* ════════════════════════════════════════════════════════════
+   SORTIES COLLECTIVES DE LA COMMISSION (programmées par le/la responsable)
+════════════════════════════════════════════════════════════ */
+function initSortiesCollectives() {
+  if (S.unsubSortiesCollectives) return;
+  S.unsubSortiesCollectives = window._listenSortiesCollectives(list => {
+    S.sortiesCollectives = list;
+    renderSortiesCollectivesResp();
+    renderSortiesCollectivesEv();
+  });
+}
+
+async function creerSortieCollective() {
+  const date = document.getElementById('sc-date')?.value;
+  const lieu = document.getElementById('sc-lieu')?.value.trim();
+  const desc = document.getElementById('sc-desc')?.value.trim();
+  if (!date || !lieu) { toast('❌ Date et lieu obligatoires'); return; }
+  const btn = document.getElementById('sc-save-btn');
+  if (btn) btn.disabled = true;
+  try {
+    await window._createSortieCollective({ date, lieu, description: desc || null, creePar: S.respNom || 'Responsable' });
+    toast('✅ Sortie collective publiée — les évangélistes vont être notifiés');
+    document.getElementById('sc-date').value = '';
+    document.getElementById('sc-lieu').value = '';
+    document.getElementById('sc-desc').value = '';
+  } catch(e) {
+    console.error(e);
+    toast('❌ Erreur publication sortie collective');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function renderSortiesCollectivesResp() {
+  const el = document.getElementById('sorties-collectives-list');
+  if (!el) return;
+  const list = S.sortiesCollectives || [];
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="ico">🚌</div><p>Aucune sortie collective programmée</p></div>';
+    return;
+  }
+  const evs = S.evs || [];
+  el.innerHTML = list.map(s => {
+    const reponses = s.reponses || {};
+    const lignes = evs.map(ev => {
+      const r = reponses[ev.id];
+      let badge = '<span style="color:var(--mu);font-size:11px;">⏳ pas de réponse</span>';
+      if (r && r.statut === 'present') badge = '<span style="color:var(--ok);font-size:11px;font-weight:700;">✅ Présent</span>';
+      if (r && r.statut === 'absent')  badge = '<span style="color:#c0392b;font-size:11px;font-weight:700;">❌ Absent — ' + (r.motif ? _esc(r.motif) : 'sans motif') + '</span>';
+      return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--bo);font-size:12.5px;">
+        <span>${_esc(ev.nom || ev.prenom || 'Évangéliste')}</span>${badge}
+      </div>`;
+    }).join('');
+    return `<div style="background:var(--surface);border:1px solid var(--bo);border-radius:12px;padding:14px 16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div style="font-weight:700;">🚌 ${_esc(s.lieu)} — ${new Date(s.date).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'})}</div>
+          ${s.description ? `<div style="font-size:12.5px;color:var(--mu);margin-top:2px;">${_esc(s.description)}</div>` : ''}
+        </div>
+        <button class="btn-icon" onclick="if(confirm('Supprimer cette sortie collective ?')) window._deleteSortieCollective('${s.id}')" title="Supprimer">🗑️</button>
+      </div>
+      <div style="margin-top:10px;">${lignes || '<span style="color:var(--mu);font-size:12px;">Aucun évangéliste</span>'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderSortiesCollectivesEv() {
+  const el = document.getElementById('ev-sorties-collectives-bloc');
+  if (!el) return;
+  const today = new Date().toISOString().split('T')[0];
+  const upcoming = (S.sortiesCollectives || []).filter(s => s.date >= today);
+  if (!upcoming.length) { el.innerHTML = ''; return; }
+  el.innerHTML = upcoming.map(s => {
+    const rep = (s.reponses || {})[S.evId];
+    const statut = rep ? rep.statut : null;
+    return `<div style="background:var(--surface);border:1.5px solid var(--c1);border-radius:14px;padding:14px 16px;margin-bottom:12px;">
+      <div style="font-weight:700;font-size:13px;">🚌 Sortie collective — ${_esc(s.lieu)}</div>
+      <div style="font-size:12.5px;color:var(--mu);margin:2px 0 8px;">${new Date(s.date).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}${s.description ? ' · ' + _esc(s.description) : ''}</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn ${statut==='present'?'btn-primary':''}" style="flex:1;" onclick="repondreSortieUI('${s.id}','present')">✅ Je viens</button>
+        <button class="btn ${statut==='absent'?'btn-primary':''}" style="flex:1;" onclick="repondreSortieUI('${s.id}','absent')">❌ Je ne peux pas</button>
+      </div>
+      ${statut==='absent' && rep.motif ? `<div style="font-size:11.5px;color:var(--mu);margin-top:6px;">Motif : ${_esc(rep.motif)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function repondreSortieUI(sortieId, statut) {
+  let motif = null;
+  if (statut === 'absent') {
+    motif = prompt('Motif de votre absence (obligatoire) :');
+    if (!motif || !motif.trim()) { toast('❌ Le motif est obligatoire pour signaler une absence'); return; }
+  }
+  try {
+    await window._repondreSortieCollective(sortieId, S.evId, statut, motif);
+    toast(statut === 'present' ? '✅ Réponse enregistrée : vous venez' : '✅ Réponse enregistrée : absence notée');
+  } catch(e) {
+    console.error(e);
+    toast('❌ Erreur enregistrement de la réponse');
+  }
+}
+
 function populateSortieEvWrap() {
   const wrap = document.getElementById('sor-ev-wrap');
   if (!wrap) return;
@@ -5407,7 +5655,7 @@ function switchTab(name, btn) {
     if (badge) badge.style.display = 'none';
   }
   if (name === 'equipes') { renderEquipes(); renderZoneChips(); }
-  if (name === 'sorties') { initSorties(); populateSortieEvWrap(); }
+  if (name === 'sorties') { initSorties(); populateSortieEvWrap(); initSortiesCollectives(); }
 }
 
 /* ── VUE ÉQUIPES PAR QUARTIER ─────────────────────────────── */
@@ -6502,33 +6750,43 @@ function switchEvTab(name, btn) {
   if (el) { el.style.display = 'block'; el.classList.add('on'); }
   if (btn) btn.classList.add('on');
   if (name === 'acts')    renderEvMyActs();
-  if (name === 'rappels') { renderEvAgenda(); renderEvRappels(); renderDispoToggle(); }
+  if (name === 'rappels') { renderEvAgenda(); renderEvRappels(); renderDispoToggle(); checkPushStatus(); renderSortiesCollectivesEv(); }
 }
 
 /* ── DISPONIBILITÉ POUR ACCOMPAGNER UNE VISITE ───────────── */
 function renderDispoToggle() {
   const ev = (S.evs||[]).find(e => e.id === S.evId);
   const on = !!(ev && ev.disponible);
-  const cb = document.getElementById('ev-dispo-toggle');
-  const slider = document.getElementById('ev-dispo-slider');
+  const btn = document.getElementById('ev-dispo-btn');
   const knob = document.getElementById('ev-dispo-knob');
-  if (!cb) return;
-  cb.checked = on;
-  if (slider) slider.style.background = on ? 'var(--ok)' : 'var(--bo)';
+  if (!btn) return;
+  btn.style.background = on ? 'var(--ok)' : 'var(--bo)';
+  btn.dataset.on = on ? '1' : '0';
   if (knob) knob.style.left = on ? '23px' : '3px';
 }
 
-async function toggleMaDisponibilite(checked) {
-  if (!S.evId) return;
+async function toggleMaDisponibilite() {
+  if (!S.evId) { toast('❌ Session non identifiée — reconnectez-vous'); return; }
+  const btn = document.getElementById('ev-dispo-btn');
+  const current = btn && btn.dataset.on === '1';
+  const next = !current;
+  if (btn) btn.disabled = true;
   try {
     await db.collection('evangelistes').doc(S.evId).update({
-      disponible: checked,
+      disponible: next,
       disponibleMaj: firebase.firestore.FieldValue.serverTimestamp()
     });
-    toast(checked ? '✅ Vous êtes marqué disponible pour accompagner une visite' : '⏸️ Disponibilité désactivée');
-  } catch(e) {
-    toast('❌ Erreur — réessayez');
+    // Mise à jour optimiste locale en attendant le listener temps réel
+    const ev = (S.evs||[]).find(e => e.id === S.evId);
+    if (ev) ev.disponible = next;
     renderDispoToggle();
+    toast(next ? '✅ Vous êtes marqué disponible pour accompagner une visite' : '⏸️ Disponibilité désactivée');
+  } catch(e) {
+    console.error('toggleMaDisponibilite:', e);
+    toast('❌ Erreur (' + (e.code || e.message || 'inconnue') + ') — réessayez');
+    renderDispoToggle();
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
