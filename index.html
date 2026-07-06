@@ -1617,6 +1617,7 @@ body .animate, body .spinner, body [class*="anim"] {
     <button class="tabtop" onclick="switchTab('suivi',this)">📞 Suivi <span id="notif-badge" style="display:none" class="notif-dot"></span></button>
     <button class="tabtop" onclick="switchTab('equipes',this)">🗺️ Équipes</button>
     <button class="tabtop" onclick="switchTab('sorties',this)">🚶 Sorties</button>
+    <button class="tabtop" onclick="switchTab('communications',this)">📬 Communications <span id="comm-badge" style="display:none" class="notif-dot"></span></button>
     <button class="tabtop" onclick="switchTab('evangelistes',this)">👥 Évangélistes</button>
     <button class="tabtop" onclick="switchTab('contacts',this)">👥 Contacts équipe</button>
   </div>
@@ -1971,7 +1972,13 @@ body .animate, body .spinner, body [class*="anim"] {
 
       <!-- Liste unique : réponses + compte-rendu lié -->
       <div class="card" style="padding:18px;margin-bottom:18px;">
-        <div class="chart-title" style="margin-bottom:10px;">Sorties programmées, réponses & comptes-rendus</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+          <div class="chart-title" style="margin-bottom:0;">Sorties collectives</div>
+          <div style="display:flex;gap:6px;">
+            <button class="tbtn-period on" id="sc-filter-avenir" onclick="setSortieCollectiveFilter('avenir',this)">📅 À venir</button>
+            <button class="tbtn-period" id="sc-filter-historique" onclick="setSortieCollectiveFilter('historique',this)">🗂️ Historique</button>
+          </div>
+        </div>
         <div id="sorties-collectives-list">
           <div class="empty-state"><div class="ico">🚌</div><p>Aucune sortie programmée</p></div>
         </div>
@@ -1982,6 +1989,23 @@ body .animate, body .spinner, body [class*="anim"] {
         <div class="chart-title" style="margin-bottom:10px;">🗄️ Archive — anciens comptes-rendus</div>
         <div id="sorties-list">
           <div class="empty-state"><div class="ico">🚶</div><p>Aucune sortie enregistrée</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB COMMUNICATIONS -->
+    <div class="tabcontent" id="tab-communications">
+      <div class="card" style="padding:18px;margin-bottom:14px;">
+        <div class="chart-title" style="margin-bottom:4px;">📬 File d'envoi — en attente de validation</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Ces rappels (hebdo, visite mensuelle) sont générés automatiquement mais ne partent qu'après votre validation. Vous pouvez modifier le contenu avant l'envoi.</div>
+        <div id="comm-queue-list">
+          <div class="empty-state"><div class="ico">⏳</div><p>Chargement…</p></div>
+        </div>
+      </div>
+      <div class="card" style="padding:18px;">
+        <div class="chart-title" style="margin-bottom:10px;">📁 Historique des communications envoyées</div>
+        <div id="comm-historique-list">
+          <div class="empty-state"><div class="ico">📭</div><p>Aucun historique</p></div>
         </div>
       </div>
     </div>
@@ -2876,6 +2900,50 @@ window._ajouterCompteRenduSortieCollective = (id, data) => {
       ajouteAt: firebase.firestore.FieldValue.serverTimestamp()
     }
   });
+};
+
+/* ── FILE D'ENVOI — COMMUNICATIONS (validation manuelle) ───
+   Contrairement aux emails "d'action" (rapports, fiches individuelles)
+   qui partent automatiquement, ces 3 rappels (hebdo, visite mensuelle,
+   sortie collective) sont d'abord déposés ici en statut "attente".
+   Le/la responsable les valide (et peut les modifier) avant envoi. ── */
+window._upsertCommunication = (id, data) => {
+  return db.collection('communications_queue').doc(id).set({
+    ...data,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+};
+window._listenCommunications = (cb) => {
+  // NB: si Firestore réclame un index composite (statut + createdAt),
+  // suivre le lien fourni dans l'erreur console pour le créer en 1 clic.
+  return db.collection('communications_queue')
+    .where('statut', '==', 'attente')
+    .orderBy('createdAt', 'desc')
+    .limit(100)
+    .onSnapshot(
+      snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      err => { console.error('communications_queue:', err); cb([]); }
+    );
+};
+window._listenHistoriqueCommunications = (cb) => {
+  return db.collection('communications_queue')
+    .where('statut', 'in', ['envoye', 'ignore'])
+    .orderBy('createdAt', 'desc')
+    .limit(60)
+    .onSnapshot(
+      snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      err => { console.error('historique communications:', err); cb([]); }
+    );
+};
+window._envoyerCommunication = (id, data) => {
+  return db.collection('communications_queue').doc(id).update({
+    ...data,
+    statut: 'envoye',
+    envoyeAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+};
+window._ignorerCommunication = (id) => {
+  return db.collection('communications_queue').doc(id).update({ statut: 'ignore' });
 };
 
 window._FB_READY = true;
@@ -5328,12 +5396,25 @@ async function creerSortieCollective() {
   }
 }
 
+function setSortieCollectiveFilter(mode, btn) {
+  S._sortieCollectiveFilter = mode;
+  ['sc-filter-avenir', 'sc-filter-historique'].forEach(id => document.getElementById(id)?.classList.remove('on'));
+  if (btn) btn.classList.add('on');
+  renderSortiesCollectivesResp();
+}
+
 function renderSortiesCollectivesResp() {
   const el = document.getElementById('sorties-collectives-list');
   if (!el) return;
-  const list = S.sortiesCollectives || [];
+  const mode  = S._sortieCollectiveFilter || 'avenir';
+  const today = new Date().toISOString().split('T')[0];
+  const list = (S.sortiesCollectives || []).filter(s =>
+    mode === 'historique' ? s.date < today : s.date >= today
+  );
   if (!list.length) {
-    el.innerHTML = '<div class="empty-state"><div class="ico">🚌</div><p>Aucune sortie programmée</p></div>';
+    el.innerHTML = mode === 'historique'
+      ? '<div class="empty-state"><div class="ico">🗂️</div><p>Aucune sortie passée pour le moment</p></div>'
+      : '<div class="empty-state"><div class="ico">🚌</div><p>Aucune sortie à venir programmée</p></div>';
     return;
   }
   const evs = S.evs || [];
@@ -5365,7 +5446,12 @@ function renderSortiesCollectivesResp() {
           </div>
           <div class="edit-field" style="margin-top:8px;"><label>🙋 Autres participants (non-évangélistes)</label><input type="text" id="cr-autres" value="${_esc(cr?.autresParticipants || '')}" placeholder="ex: Jean-Paul, visiteur…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-size:14px;width:100%;color:var(--tx);"></div>
           <div class="edit-field" style="margin-top:8px;"><label>📝 Déroulement / observations</label><textarea id="cr-texte" rows="3" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-size:14px;width:100%;color:var(--tx);resize:vertical;">${_esc(cr?.texte || '')}</textarea></div>
-          <div class="edit-field" style="margin-top:8px;"><label>📋 Nouveaux contacts rencontrés</label><textarea id="cr-contacts" rows="3" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-size:14px;width:100%;color:var(--tx);resize:vertical;">${_esc(cr?.contacts || '')}</textarea></div>
+          <div class="edit-field" style="margin-top:8px;">
+            <label>📋 Nouveaux contacts rencontrés <span style="font-size:10px;color:var(--mu);font-weight:400;text-transform:none;">(un contact par ligne, ex : Nom Prénom - téléphone)</span></label>
+            <textarea id="cr-contacts-${s.id}" rows="3" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-size:14px;width:100%;color:var(--tx);resize:vertical;">${_esc(cr?.contacts || '')}</textarea>
+            <button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="verifierDoublonsContacts('${s.id}')">🔍 Vérifier les doublons avec les fiches existantes</button>
+            <div id="cr-doublons-${s.id}" style="margin-top:8px;"></div>
+          </div>
           <div style="display:flex;gap:8px;margin-top:10px;">
             <button class="btn btn-primary" style="flex:1;" onclick="saveCrSortieCollective('${s.id}')">💾 Enregistrer le compte-rendu</button>
             <button class="btn" style="flex:0;" onclick="S.crEditSortieId=null;renderSortiesCollectivesResp();">Annuler</button>
@@ -5404,13 +5490,53 @@ function renderSortiesCollectivesResp() {
   }).join('');
 }
 
+/* ── ANTI-DOUBLON : vérifier les nouveaux contacts contre les fiches existantes ── */
+function _normNom(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, '').trim();
+}
+function verifierDoublonsContacts(sortieId) {
+  const raw = document.getElementById(`cr-contacts-${sortieId}`)?.value || '';
+  const lignes = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const out = document.getElementById(`cr-doublons-${sortieId}`);
+  if (!out) return;
+  if (!lignes.length) { out.innerHTML = '<div style="font-size:11.5px;color:var(--mu);">Aucun contact à vérifier — ajoutez une ligne par contact ci-dessus.</div>'; return; }
+
+  const fiches = getFiches();
+  const results = lignes.map(ligne => {
+    // Le nom est la partie avant un éventuel " - téléphone"
+    const nomBrut = ligne.split(' - ')[0].split(',')[0];
+    const normLigne = _normNom(nomBrut);
+    const match = fiches.find(f => {
+      const normFiche = _normNom(`${f.nom || ''} ${f.prenom || ''}`);
+      return normFiche && normLigne && (normFiche === normLigne || normFiche.includes(normLigne) || normLigne.includes(normFiche));
+    });
+    return { ligne, match };
+  });
+
+  const doublons = results.filter(r => r.match);
+  const nouveaux = results.filter(r => !r.match);
+
+  out.innerHTML = `
+    ${doublons.length ? `
+      <div style="background:rgba(184,106,0,0.08);border:1px solid rgba(184,106,0,0.25);border-radius:8px;padding:8px 10px;margin-bottom:6px;">
+        <div style="font-size:11.5px;font-weight:700;color:var(--wa);margin-bottom:4px;">⚠️ Déjà en fiche (${doublons.length}) — ne pas recréer :</div>
+        ${doublons.map(d => `<div style="font-size:11.5px;">• ${_esc(d.ligne)} → correspond à <strong>${_esc(d.match.nom)} ${_esc(d.match.prenom)}</strong></div>`).join('')}
+      </div>` : ''}
+    ${nouveaux.length ? `
+      <div style="background:rgba(26,122,58,0.08);border:1px solid rgba(26,122,58,0.25);border-radius:8px;padding:8px 10px;">
+        <div style="font-size:11.5px;font-weight:700;color:var(--ok);margin-bottom:4px;">✅ Nouveaux contacts (${nouveaux.length}) — à créer en fiche si pertinent :</div>
+        ${nouveaux.map(n => `<div style="font-size:11.5px;">• ${_esc(n.ligne)}</div>`).join('')}
+      </div>` : ''}
+  `;
+}
+
 async function saveCrSortieCollective(sortieId) {
   const data = {
     heureDebut:         document.getElementById('cr-hdebut')?.value || null,
     heureFin:           document.getElementById('cr-hfin')?.value || null,
     autresParticipants: document.getElementById('cr-autres')?.value.trim() || null,
     texte:              document.getElementById('cr-texte')?.value.trim() || null,
-    contacts:           document.getElementById('cr-contacts')?.value.trim() || null,
+    contacts:           document.getElementById(`cr-contacts-${sortieId}`)?.value.trim() || null,
   };
   try {
     await window._ajouterCompteRenduSortieCollective(sortieId, data);
@@ -5419,6 +5545,108 @@ async function saveCrSortieCollective(sortieId) {
   } catch(e) {
     console.error(e);
     toast('❌ Erreur enregistrement du compte-rendu');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   COMMUNICATIONS — file d'envoi à validation manuelle
+════════════════════════════════════════════════════════════ */
+function initCommunications() {
+  if (!S.unsubCommunications) {
+    S.unsubCommunications = window._listenCommunications(list => {
+      S.commQueue = list;
+      renderCommQueue();
+      const badge = document.getElementById('comm-badge');
+      if (badge) badge.style.display = list.length ? 'inline-block' : 'none';
+    });
+  }
+  if (!S.unsubCommHisto) {
+    S.unsubCommHisto = window._listenHistoriqueCommunications(list => {
+      S.commHisto = list;
+      renderCommHistorique();
+    });
+  }
+}
+
+const _COMM_TYPE_LABELS = {
+  hebdo:       '📅 Rappel hebdomadaire',
+  visite_mois: '🚶 Rappel visite mensuelle',
+  sortie:      '🚌 Invitation sortie collective',
+};
+
+function renderCommQueue() {
+  const el = document.getElementById('comm-queue-list');
+  if (!el) return;
+  const list = S.commQueue || [];
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="ico">✅</div><p>Aucune communication en attente — tout est à jour</p></div>';
+    return;
+  }
+  el.innerHTML = list.map(c => `
+    <div style="background:var(--surface);border:1.5px solid var(--bo);border-radius:12px;padding:14px 16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+        <div style="font-weight:700;font-size:13px;">${_COMM_TYPE_LABELS[c.type] || '📧 Rappel'} — ${_esc(c.evNom || 'Évangéliste')}</div>
+        <span style="font-size:11px;color:var(--mu);">${c.evEmail ? _esc(c.evEmail) : "⚠️ pas d'email renseigné"}</span>
+      </div>
+      <textarea id="comm-txt-${c.id}" rows="7" style="width:100%;font-family:'DM Sans',sans-serif;font-size:13px;padding:10px;border:1.5px solid var(--bo);border-radius:8px;background:var(--bg);color:var(--tx);resize:vertical;white-space:pre-wrap;">${_esc(c.contenu || '')}</textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn btn-primary" style="flex:2;" onclick="envoyerCommunication('${c.id}')">📧 Envoyer</button>
+        <button class="btn btn-outline" style="flex:1;" onclick="ignorerCommunication('${c.id}')">Ignorer</button>
+      </div>
+    </div>`).join('');
+}
+
+function renderCommHistorique() {
+  const el = document.getElementById('comm-historique-list');
+  if (!el) return;
+  const list = S.commHisto || [];
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="ico">📭</div><p>Aucun historique pour le moment</p></div>';
+    return;
+  }
+  el.innerHTML = list.map(c => `
+    <div style="padding:10px 0;border-bottom:1px solid var(--bo);font-size:12.5px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+        <strong>${_COMM_TYPE_LABELS[c.type] || ''} — ${_esc(c.evNom || '')}</strong>
+        <span style="font-weight:700;color:${c.statut === 'envoye' ? 'var(--ok)' : 'var(--mu)'};">${c.statut === 'envoye' ? '✅ Envoyé' : '— Ignoré'}</span>
+      </div>
+    </div>`).join('');
+}
+
+async function envoyerCommunication(id) {
+  const c = (S.commQueue || []).find(x => x.id === id);
+  if (!c) return;
+  const contenu = document.getElementById(`comm-txt-${id}`)?.value.trim() || c.contenu;
+  if (!c.evEmail) { toast('❌ Aucun email pour cet évangéliste — ajoutez-en un dans sa fiche évangéliste'); return; }
+  try {
+    // NB : réutilise le template EmailJS existant (template_vkamgqr).
+    // Si le rendu du contenu long ne convient pas, prévoir un template EmailJS
+    // dédié avec un champ "corps_message" en texte libre.
+    await _ejsSend(_EJS.service, _EJS.template, {
+      to_email:    c.evEmail,
+      ev_nom:      c.evNom || 'Évangéliste',
+      fiche_nom:   '',
+      action:      contenu,
+      action_date: new Date().toISOString().slice(0, 10),
+      verset:      '',
+      verset_ref:  '',
+    }, 'communication-manuelle');
+    await window._envoyerCommunication(id, { contenu });
+    toast('✅ Communication envoyée à ' + c.evNom);
+  } catch (e) {
+    console.error(e);
+    toast('❌ Erreur lors de l\'envoi');
+  }
+}
+
+async function ignorerCommunication(id) {
+  if (!confirm('Ignorer cette communication ? Elle ne sera pas envoyée.')) return;
+  try {
+    await window._ignorerCommunication(id);
+    toast('Communication ignorée');
+  } catch (e) {
+    console.error(e);
+    toast('❌ Erreur');
   }
 }
 
@@ -5681,6 +5909,7 @@ function switchTab(name, btn) {
   }
   if (name === 'equipes') { renderEquipes(); renderZoneChips(); }
   if (name === 'sorties') { initSorties(); populateSortieEvWrap(); initSortiesCollectives(); }
+  if (name === 'communications') { initCommunications(); }
 }
 
 /* ── VUE ÉQUIPES PAR QUARTIER ─────────────────────────────── */
@@ -6699,15 +6928,39 @@ async function checkRappelHebdoContact() {
 
   if (ev.email && mesFiches.length) {
     const v = versets[0];
-    _ejsSend(_EJS.service, _EJS.template, {
-      to_email:    ev.email,
-      ev_nom:      ev.nom,
-      fiche_nom:   mesFiches.map(f => `${f.nom} ${f.prenom}`).join(', '),
-      action:      `Contacter vos ${mesFiches.length} fiche(s) d'ici lundi`,
-      action_date: now.toISOString().slice(0, 10),
-      verset:      v.txt,
-      verset_ref:  v.ref,
-    }, 'rappel-hebdo-contact').catch(() => {});
+    // Récap d'activité sur la semaine écoulée (visites + appels/messages)
+    const weekAgo = new Date(now.getTime() - 7 * 86400000);
+    const actEv = (S.activities || []).filter(a =>
+      a.evangelisteId === S.evId && a.date && new Date(a.date + 'T12:00:00') >= weekAgo
+    );
+    const nbVisites   = actEv.filter(a => a.type === 'visite').length;
+    const nbAppelsMsg = actEv.filter(a => a.type === 'appel' || a.type === 'message').length;
+
+    const contenu =
+`Bonjour ${ev.nom},
+
+Belle semaine à vous ! 🙏 Voici votre point hebdomadaire de la Commission Témoignage :
+
+📋 Vos fiches à contacter d'ici lundi (${mesFiches.length}) :
+${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
+
+📊 Cette semaine : ${nbVisites} visite(s) effectuée(s), ${nbAppelsMsg} appel(s)/message(s) envoyé(s). Merci pour votre engagement fidèle !
+
+« ${v.txt} » — ${v.ref}
+
+Fraternellement,
+Commission Témoignage — EEAM Fès`;
+
+    window._upsertCommunication(`${S.evId}_${cle}_hebdo`, {
+      type:      'hebdo',
+      evId:      S.evId,
+      evNom:     ev.nom,
+      evEmail:   ev.email,
+      cle,
+      contenu,
+      statut:    'attente',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(() => {});
   }
 }
 
@@ -6743,15 +6996,31 @@ async function checkRappelVisiteMensuelle() {
 
   if (ev.email) {
     const v = versets[1];
-    _ejsSend(_EJS.service, _EJS.template, {
-      to_email:    ev.email,
-      ev_nom:      ev.nom,
-      fiche_nom:   mesFiches.map(f => `${f.nom} ${f.prenom}`).join(', '),
-      action:      `Programmer une visite ce mois-ci (accompagnateur suggéré : ${nomsCollegues})`,
-      action_date: now.toISOString().slice(0, 10),
-      verset:      v.txt,
-      verset_ref:  v.ref,
-    }, 'rappel-visite-mensuelle').catch(() => {});
+    const contenu =
+`Bonjour ${ev.nom},
+
+Nouveau mois, nouvelle occasion de marcher aux côtés de ceux que vous suivez ! 🚶
+
+Pensez à programmer une visite accompagnée ce mois-ci pour vos ${mesFiches.length} fiche(s) :
+${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
+
+👥 Accompagnateur(s) suggéré(s) : ${nomsCollegues}
+
+« ${v.txt} » — ${v.ref}
+
+Fraternellement,
+Commission Témoignage — EEAM Fès`;
+
+    window._upsertCommunication(`${S.evId}_${cle}_visite`, {
+      type:      'visite_mois',
+      evId:      S.evId,
+      evNom:     ev.nom,
+      evEmail:   ev.email,
+      cle,
+      contenu,
+      statut:    'attente',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(() => {});
   }
 }
 
