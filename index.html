@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#7B1111">
-<title>Commission Témoignage — Paroisse de Fès v9</title>
+<title>Commission Témoignage — Paroisse de Fès </title>
 
 <!-- ── PWA : installable sur PC, Android, iOS ─────────────── -->
 <link rel="manifest" href="manifest.json">
@@ -1959,8 +1959,8 @@ body .animate, body .spinner, body [class*="anim"] {
 
       <!-- Programmer une sortie collective (toute la commission) -->
       <div class="card" style="padding:18px;margin-bottom:14px;border:1.5px solid var(--c1);">
-        <div class="chart-title" style="margin-bottom:4px;">📢 Programmer une sortie collective (toute la commission)</div>
-        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Annonce envoyée à tous les évangélistes (notification + email). Ils pourront répondre "Je viens" / "Je ne peux pas" avec motif.</div>
+        <div class="chart-title" style="margin-bottom:4px;">📢 Programmer une sortie collective</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Annonce envoyée à tous les évangélistes (notification + email). Ils répondent "Je viens" / "Je ne peux pas". Après la sortie, revenez ici pour ajouter le compte-rendu.</div>
         <div class="edit-field-row">
           <div class="edit-field"><label>Date</label><input type="date" id="sc-date" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
           <div class="edit-field"><label>Lieu</label><input type="text" id="sc-lieu" placeholder="ex: Zone Bensouda" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
@@ -1969,62 +1969,17 @@ body .animate, body .spinner, body [class*="anim"] {
         <button class="btn btn-primary btn-full" id="sc-save-btn" onclick="creerSortieCollective()" style="margin-top:12px;">📢 Publier et notifier tous les évangélistes</button>
       </div>
 
-      <!-- Suivi des réponses -->
+      <!-- Liste unique : réponses + compte-rendu lié -->
       <div class="card" style="padding:18px;margin-bottom:18px;">
-        <div class="chart-title" style="margin-bottom:10px;">Sorties collectives programmées & réponses</div>
+        <div class="chart-title" style="margin-bottom:10px;">Sorties programmées, réponses & comptes-rendus</div>
         <div id="sorties-collectives-list">
-          <div class="empty-state"><div class="ico">🚌</div><p>Aucune sortie collective programmée</p></div>
+          <div class="empty-state"><div class="ico">🚌</div><p>Aucune sortie programmée</p></div>
         </div>
       </div>
 
-      <!-- Formulaire nouvelle sortie -->
-      <div class="card" style="padding:18px;margin-bottom:14px;">
-        <div class="chart-title" style="margin-bottom:14px;">➕ Enregistrer une sortie d'évangélisation</div>
-        <div class="edit-field-row">
-          <div class="edit-field"><label>Date</label><input type="date" id="sor-date" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
-          <div class="edit-field"><label>Lieu / Quartier</label><input type="text" id="sor-lieu" placeholder="ex: Campus INSEA, Médina…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
-        </div>
-        <div class="edit-field-row">
-          <div class="edit-field">
-            <label>Heure de début</label>
-            <input type="time" id="sor-heure-debut" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
-          </div>
-          <div class="edit-field">
-            <label>Heure de fin</label>
-            <input type="time" id="sor-heure-fin" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
-          </div>
-        </div>
-        <div class="edit-field-row full">
-          <div class="edit-field">
-            <label>👥 Évangélistes présents</label>
-            <div id="sor-ev-wrap" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:var(--bg2);border:1.5px solid var(--bo);border-radius:8px;min-height:44px;" class="sor-ev-container">
-              <span style="font-size:12px;color:var(--mu);font-style:italic;">Chargement…</span>
-            </div>
-          </div>
-        </div>
-        <div class="edit-field-row full">
-          <div class="edit-field">
-            <label>🙋 Autres participants <span style="font-weight:400;font-style:italic;text-transform:none;font-size:10px;">(non-évangélistes)</span></label>
-            <input type="text" id="sor-autres" placeholder="ex: Jean-Paul, visiteur extérieur…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
-          </div>
-        </div>
-        <div class="edit-field-row full">
-          <div class="edit-field">
-            <label>📝 Compte-rendu de la sortie</label>
-            <textarea id="sor-cr" placeholder="Décrivez le déroulement, les rencontres, les observations spirituelles…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:vertical;min-height:80px;width:100%;color:var(--tx);"></textarea>
-          </div>
-        </div>
-        <div class="edit-field-row full">
-          <div class="edit-field">
-            <label>📋 Nouveaux contacts rencontrés <span style="font-weight:400;font-style:italic;text-transform:none;font-size:10px;">(noms, coordonnées, notes)</span></label>
-            <textarea id="sor-contacts" placeholder="ex: Paul Nguema — 06XXXXXXXX — étudiant ENCG, ouvert à revenir&#10;Marie Diallo — sans tel — quartier Agdal, intéressée par groupe de prière…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:vertical;min-height:70px;width:100%;color:var(--tx);"></textarea>
-          </div>
-        </div>
-        <button class="btn btn-primary btn-full" id="btn-sortie-save" onclick="saveSortie()" style="margin-top:8px;">💾 Enregistrer la sortie</button>
-      </div>
-      <!-- Historique sorties -->
+      <!-- Archive : anciens comptes-rendus enregistrés avant la fusion des sections -->
       <div class="card" style="padding:16px;">
-        <div class="chart-title" style="margin-bottom:10px;">Historique des sorties</div>
+        <div class="chart-title" style="margin-bottom:10px;">🗄️ Archive — anciens comptes-rendus</div>
         <div id="sorties-list">
           <div class="empty-state"><div class="ico">🚶</div><p>Aucune sortie enregistrée</p></div>
         </div>
@@ -2535,7 +2490,7 @@ db.enablePersistence({ synchronizeTabs: true }).catch(e => {
    NOTIFICATIONS PUSH (Web Push — 100% gratuit)
    VERSION TEST — clé publique VAPID (non secrète)
 ═══════════════════════════════════════════════════ */
-const VAPID_PUBLIC_KEY = 'BLfoZSEyZ4pplPuud3s9AW01NJBVCxIWVCquVqykyGVSZ5yzbrN_ylQaqDxmwSHGx324d6nWcJrm9p2zQ5SSyZA';
+const VAPID_PUBLIC_KEY = 'BLDoHy4WDsUo3HNLq8fpFg5y9GafTqp64pHZ_NN62wbECKKz7o0-RWhlUOroI0LnT-UWDfkAo3fJvyrLbZmwliM';
 
 function _urlB64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -2914,6 +2869,14 @@ window._repondreSortieCollective = (sortieId, evId, statut, motif) => {
 window._deleteSortieCollective = (id) => {
   return db.collection('sorties_collectives').doc(id).delete();
 };
+window._ajouterCompteRenduSortieCollective = (id, data) => {
+  return db.collection('sorties_collectives').doc(id).update({
+    compteRendu: {
+      ...data,
+      ajouteAt: firebase.firestore.FieldValue.serverTimestamp()
+    }
+  });
+};
 
 window._FB_READY = true;
 console.log('✅ Firebase prêt');
@@ -2980,6 +2943,7 @@ const S = {
   myFiches: [],
   sorties:  [],
   sortiesCollectives: [],
+  crEditSortieId: null,
   activities: [],
   notifs:   [],
   zones:    [],
@@ -5369,12 +5333,13 @@ function renderSortiesCollectivesResp() {
   if (!el) return;
   const list = S.sortiesCollectives || [];
   if (!list.length) {
-    el.innerHTML = '<div class="empty-state"><div class="ico">🚌</div><p>Aucune sortie collective programmée</p></div>';
+    el.innerHTML = '<div class="empty-state"><div class="ico">🚌</div><p>Aucune sortie programmée</p></div>';
     return;
   }
   const evs = S.evs || [];
   el.innerHTML = list.map(s => {
     const reponses = s.reponses || {};
+    const presents = evs.filter(ev => reponses[ev.id] && reponses[ev.id].statut === 'present');
     const lignes = evs.map(ev => {
       const r = reponses[ev.id];
       let badge = '<span style="color:var(--mu);font-size:11px;">⏳ pas de réponse</span>';
@@ -5384,17 +5349,77 @@ function renderSortiesCollectivesResp() {
         <span>${_esc(ev.nom || ev.prenom || 'Évangéliste')}</span>${badge}
       </div>`;
     }).join('');
+
+    const cr = s.compteRendu;
+    const editing = S.crEditSortieId === s.id;
+
+    let crBlock;
+    if (editing) {
+      crBlock = `
+        <div style="margin-top:12px;padding-top:12px;border-top:1.5px dashed var(--bo);">
+          <div style="font-size:12px;font-weight:700;color:var(--c1);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">📝 Compte-rendu</div>
+          <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px;">Présents (d'après les réponses) : ${presents.length ? _esc(presents.map(p=>p.nom).join(', ')) : 'aucune réponse "Je viens" enregistrée'}</div>
+          <div class="edit-field-row">
+            <div class="edit-field"><label>Heure début</label><input type="time" id="cr-hdebut" value="${cr?.heureDebut || ''}" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-size:14px;width:100%;color:var(--tx);"></div>
+            <div class="edit-field"><label>Heure fin</label><input type="time" id="cr-hfin" value="${cr?.heureFin || ''}" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-size:14px;width:100%;color:var(--tx);"></div>
+          </div>
+          <div class="edit-field" style="margin-top:8px;"><label>🙋 Autres participants (non-évangélistes)</label><input type="text" id="cr-autres" value="${_esc(cr?.autresParticipants || '')}" placeholder="ex: Jean-Paul, visiteur…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-size:14px;width:100%;color:var(--tx);"></div>
+          <div class="edit-field" style="margin-top:8px;"><label>📝 Déroulement / observations</label><textarea id="cr-texte" rows="3" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-size:14px;width:100%;color:var(--tx);resize:vertical;">${_esc(cr?.texte || '')}</textarea></div>
+          <div class="edit-field" style="margin-top:8px;"><label>📋 Nouveaux contacts rencontrés</label><textarea id="cr-contacts" rows="3" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-size:14px;width:100%;color:var(--tx);resize:vertical;">${_esc(cr?.contacts || '')}</textarea></div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button class="btn btn-primary" style="flex:1;" onclick="saveCrSortieCollective('${s.id}')">💾 Enregistrer le compte-rendu</button>
+            <button class="btn" style="flex:0;" onclick="S.crEditSortieId=null;renderSortiesCollectivesResp();">Annuler</button>
+          </div>
+        </div>`;
+    } else if (cr) {
+      crBlock = `
+        <div style="margin-top:12px;padding-top:12px;border-top:1.5px dashed var(--bo);">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-size:12px;font-weight:700;color:var(--ok);text-transform:uppercase;">📝 Compte-rendu enregistré</div>
+            <button class="btn-icon" onclick="S.crEditSortieId='${s.id}';renderSortiesCollectivesResp();" title="Modifier">✏️</button>
+          </div>
+          ${cr.heureDebut || cr.heureFin ? `<div style="font-size:12px;color:var(--mu);margin-top:4px;">🕐 ${cr.heureDebut||'?'} — ${cr.heureFin||'?'}</div>` : ''}
+          ${cr.autresParticipants ? `<div style="font-size:12px;color:var(--mu);margin-top:2px;">🙋 ${_esc(cr.autresParticipants)}</div>` : ''}
+          ${cr.texte ? `<div style="font-size:12.5px;margin-top:6px;white-space:pre-wrap;">${_esc(cr.texte)}</div>` : ''}
+          ${cr.contacts ? `<div style="font-size:12px;color:var(--mu);margin-top:6px;white-space:pre-wrap;"><strong>Contacts :</strong> ${_esc(cr.contacts)}</div>` : ''}
+        </div>`;
+    } else {
+      crBlock = `
+        <div style="margin-top:12px;padding-top:12px;border-top:1.5px dashed var(--bo);">
+          <button class="btn btn-primary btn-full" onclick="S.crEditSortieId='${s.id}';renderSortiesCollectivesResp();">📝 Ajouter le compte-rendu</button>
+        </div>`;
+    }
+
     return `<div style="background:var(--surface);border:1px solid var(--bo);border-radius:12px;padding:14px 16px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
           <div style="font-weight:700;">🚌 ${_esc(s.lieu)} — ${new Date(s.date).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'})}</div>
           ${s.description ? `<div style="font-size:12.5px;color:var(--mu);margin-top:2px;">${_esc(s.description)}</div>` : ''}
         </div>
-        <button class="btn-icon" onclick="if(confirm('Supprimer cette sortie collective ?')) window._deleteSortieCollective('${s.id}')" title="Supprimer">🗑️</button>
+        <button class="btn-icon" onclick="if(confirm('Supprimer cette sortie ?')) window._deleteSortieCollective('${s.id}')" title="Supprimer">🗑️</button>
       </div>
       <div style="margin-top:10px;">${lignes || '<span style="color:var(--mu);font-size:12px;">Aucun évangéliste</span>'}</div>
+      ${crBlock}
     </div>`;
   }).join('');
+}
+
+async function saveCrSortieCollective(sortieId) {
+  const data = {
+    heureDebut:         document.getElementById('cr-hdebut')?.value || null,
+    heureFin:           document.getElementById('cr-hfin')?.value || null,
+    autresParticipants: document.getElementById('cr-autres')?.value.trim() || null,
+    texte:              document.getElementById('cr-texte')?.value.trim() || null,
+    contacts:           document.getElementById('cr-contacts')?.value.trim() || null,
+  };
+  try {
+    await window._ajouterCompteRenduSortieCollective(sortieId, data);
+    S.crEditSortieId = null;
+    toast('✅ Compte-rendu enregistré');
+  } catch(e) {
+    console.error(e);
+    toast('❌ Erreur enregistrement du compte-rendu');
+  }
 }
 
 function renderSortiesCollectivesEv() {
