@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#7B1111">
-<title>Commission Témoignage — Paroisse de Fès </title>
+<title>Commission Témoignage — Paroisse de Fès v9</title>
 
 <!-- ── PWA : installable sur PC, Android, iOS ─────────────── -->
 <link rel="manifest" href="manifest.json">
@@ -1995,6 +1995,29 @@ body .animate, body .spinner, body [class*="anim"] {
 
     <!-- TAB COMMUNICATIONS -->
     <div class="tabcontent" id="tab-communications">
+      <div class="card" style="padding:18px;margin-bottom:14px;border:1.5px solid var(--c1);">
+        <div class="chart-title" style="margin-bottom:4px;">✍️ Nouveau message manuel</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Envoyez ce que vous voulez, à qui vous voulez, autant de fois que nécessaire — sans attendre un rappel automatique.</div>
+        <div class="edit-field"><label>Destinataire</label>
+          <select id="comm-manuel-dest" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
+            <option value="__tous__">👥 Tous les évangélistes actifs</option>
+          </select>
+        </div>
+        <div class="edit-field" style="margin-top:10px;"><label>Message</label>
+          <textarea id="comm-manuel-texte" rows="4" placeholder="Votre message…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);resize:vertical;"></textarea>
+        </div>
+        <button class="btn btn-primary btn-full" id="comm-manuel-btn" onclick="envoyerCommunicationManuelle()" style="margin-top:12px;">➕ Ajouter à la file d'envoi</button>
+      </div>
+
+      <div class="card" style="padding:18px;margin-bottom:14px;border:1.5px dashed var(--bo);">
+        <div class="chart-title" style="margin-bottom:4px;">🧪 Tester les rappels automatiques</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:12px;">Génère un rappel réel (avec un vrai évangéliste et ses vraies fiches) dans la file ci-dessous, sans attendre dimanche ou le 1er du mois.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-outline" style="flex:1;" onclick="forcerTestRappel('hebdo')">📅 Tester le rappel hebdo</button>
+          <button class="btn btn-outline" style="flex:1;" onclick="forcerTestRappel('visite_mois')">🚶 Tester le rappel visite</button>
+        </div>
+      </div>
+
       <div class="card" style="padding:18px;margin-bottom:14px;">
         <div class="chart-title" style="margin-bottom:4px;">📬 File d'envoi — en attente de validation</div>
         <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Ces rappels (hebdo, visite mensuelle) sont générés automatiquement mais ne partent qu'après votre validation. Vous pouvez modifier le contenu avant l'envoi.</div>
@@ -2944,6 +2967,15 @@ window._envoyerCommunication = (id, data) => {
 };
 window._ignorerCommunication = (id) => {
   return db.collection('communications_queue').doc(id).update({ statut: 'ignore' });
+};
+window._remettreEnAttenteCommunication = (id) => {
+  return db.collection('communications_queue').doc(id).update({
+    statut: 'attente',
+    remisEnAttenteAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+};
+window._supprimerCommunication = (id) => {
+  return db.collection('communications_queue').doc(id).delete();
 };
 
 window._FB_READY = true;
@@ -5449,8 +5481,6 @@ function renderSortiesCollectivesResp() {
           <div class="edit-field" style="margin-top:8px;">
             <label>📋 Nouveaux contacts rencontrés <span style="font-size:10px;color:var(--mu);font-weight:400;text-transform:none;">(un contact par ligne, ex : Nom Prénom - téléphone)</span></label>
             <textarea id="cr-contacts-${s.id}" rows="3" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-size:14px;width:100%;color:var(--tx);resize:vertical;">${_esc(cr?.contacts || '')}</textarea>
-            <button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="verifierDoublonsContacts('${s.id}')">🔍 Vérifier les doublons avec les fiches existantes</button>
-            <div id="cr-doublons-${s.id}" style="margin-top:8px;"></div>
           </div>
           <div style="display:flex;gap:8px;margin-top:10px;">
             <button class="btn btn-primary" style="flex:1;" onclick="saveCrSortieCollective('${s.id}')">💾 Enregistrer le compte-rendu</button>
@@ -5490,46 +5520,6 @@ function renderSortiesCollectivesResp() {
   }).join('');
 }
 
-/* ── ANTI-DOUBLON : vérifier les nouveaux contacts contre les fiches existantes ── */
-function _normNom(s) {
-  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, '').trim();
-}
-function verifierDoublonsContacts(sortieId) {
-  const raw = document.getElementById(`cr-contacts-${sortieId}`)?.value || '';
-  const lignes = raw.split('\n').map(l => l.trim()).filter(Boolean);
-  const out = document.getElementById(`cr-doublons-${sortieId}`);
-  if (!out) return;
-  if (!lignes.length) { out.innerHTML = '<div style="font-size:11.5px;color:var(--mu);">Aucun contact à vérifier — ajoutez une ligne par contact ci-dessus.</div>'; return; }
-
-  const fiches = getFiches();
-  const results = lignes.map(ligne => {
-    // Le nom est la partie avant un éventuel " - téléphone"
-    const nomBrut = ligne.split(' - ')[0].split(',')[0];
-    const normLigne = _normNom(nomBrut);
-    const match = fiches.find(f => {
-      const normFiche = _normNom(`${f.nom || ''} ${f.prenom || ''}`);
-      return normFiche && normLigne && (normFiche === normLigne || normFiche.includes(normLigne) || normLigne.includes(normFiche));
-    });
-    return { ligne, match };
-  });
-
-  const doublons = results.filter(r => r.match);
-  const nouveaux = results.filter(r => !r.match);
-
-  out.innerHTML = `
-    ${doublons.length ? `
-      <div style="background:rgba(184,106,0,0.08);border:1px solid rgba(184,106,0,0.25);border-radius:8px;padding:8px 10px;margin-bottom:6px;">
-        <div style="font-size:11.5px;font-weight:700;color:var(--wa);margin-bottom:4px;">⚠️ Déjà en fiche (${doublons.length}) — ne pas recréer :</div>
-        ${doublons.map(d => `<div style="font-size:11.5px;">• ${_esc(d.ligne)} → correspond à <strong>${_esc(d.match.nom)} ${_esc(d.match.prenom)}</strong></div>`).join('')}
-      </div>` : ''}
-    ${nouveaux.length ? `
-      <div style="background:rgba(26,122,58,0.08);border:1px solid rgba(26,122,58,0.25);border-radius:8px;padding:8px 10px;">
-        <div style="font-size:11.5px;font-weight:700;color:var(--ok);margin-bottom:4px;">✅ Nouveaux contacts (${nouveaux.length}) — à créer en fiche si pertinent :</div>
-        ${nouveaux.map(n => `<div style="font-size:11.5px;">• ${_esc(n.ligne)}</div>`).join('')}
-      </div>` : ''}
-  `;
-}
-
 async function saveCrSortieCollective(sortieId) {
   const data = {
     heureDebut:         document.getElementById('cr-hdebut')?.value || null,
@@ -5551,7 +5541,109 @@ async function saveCrSortieCollective(sortieId) {
 /* ════════════════════════════════════════════════════════════
    COMMUNICATIONS — file d'envoi à validation manuelle
 ════════════════════════════════════════════════════════════ */
+
+/* Génère un email HTML habillé aux couleurs de la commission
+   (même charte graphique que les rapports), à partir d'un texte
+   brut multi-lignes. Réutilisé pour tous les types de rappels. */
+function _buildCommunicationHTML(titreBadge, contenuTexte) {
+  const lignes = (contenuTexte || '').split('\n');
+  const corpsHtml = lignes.map(l => {
+    const t = l.trim();
+    if (!t) return '<div style="height:10px;"></div>';
+    if (t.startsWith('•')) return `<div style="font-size:14px;color:#1E0A0A;padding:3px 0 3px 6px;">${_esc(t)}</div>`;
+    if (t.startsWith('«') && t.includes('»')) return `<div style="font-size:13px;color:#6B3A3A;font-style:italic;margin-top:12px;padding:12px 16px;background:#FBF7F7;border-left:3px solid #A01818;border-radius:6px;">${_esc(t)}</div>`;
+    if (/^(📋|📊|👥|📍|📅|📝)/.test(t)) return `<div style="font-size:13px;font-weight:700;color:#7B1111;margin-top:14px;margin-bottom:4px;">${_esc(t)}</div>`;
+    return `<div style="font-size:14px;color:#1E0A0A;line-height:1.6;">${_esc(t)}</div>`;
+  }).join('');
+
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#F5ECEC;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F5ECEC;padding:32px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(123,17,17,0.13);">
+
+  <tr><td style="background:linear-gradient(135deg,#7B1111,#C0392B);padding:36px 32px 28px;text-align:center;">
+    <div style="font-size:11px;color:rgba(255,255,255,.65);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;">Église Évangélique au Maroc</div>
+    <div style="font-size:26px;font-weight:800;color:#fff;letter-spacing:-.3px;">Commission Témoignage</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:4px;">Paroisse de Fès</div>
+    <div style="margin-top:18px;display:inline-block;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);border-radius:40px;padding:7px 22px;">
+      <span style="color:#fff;font-size:13px;font-weight:700;">${titreBadge}</span>
+    </div>
+  </td></tr>
+
+  <tr><td style="padding:28px 32px 24px;">
+    ${corpsHtml}
+  </td></tr>
+
+  <tr><td style="background:linear-gradient(135deg,#7B1111,#A01818);padding:22px 32px;text-align:center;">
+    <div style="color:rgba(255,255,255,.9);font-size:13px;font-weight:700;">Église Évangélique au Maroc — Paroisse de Fès</div>
+    <div style="color:rgba(255,255,255,.6);font-size:11px;margin-top:4px;">Commission Témoignage</div>
+  </td></tr>
+
+</table>
+</td></tr></table>
+</body></html>`;
+}
+
+/* ── Test manuel : génère un vrai rappel (vrai évangéliste, vraies fiches) ──
+   sans attendre la vraie date, pour vérifier le circuit sans polluer avec
+   des données fictives. ── */
+async function forcerTestRappel(type) {
+  const ev = (S.evs || []).find(e => e.actif !== false && e.email);
+  if (!ev) { toast('❌ Aucun évangéliste actif avec un email trouvé — ajoutez un email dans une fiche évangéliste'); return; }
+
+  const fiches = getFiches().filter(f => f.evangelisteId === ev.id && !f.deleted);
+  const now = new Date();
+  const testCle = `TEST-${Date.now()}`;
+
+  if (type === 'hebdo') {
+    const v = versets[0];
+    const contenu =
+`Bonjour ${ev.nom},
+
+Belle semaine à vous ! 🙏 Voici votre point hebdomadaire de la Commission Témoignage :
+
+📋 Vos fiches à contacter d'ici lundi (${fiches.length}) :
+${fiches.length ? fiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n') : '• (aucune fiche assignée actuellement)'}
+
+📊 Cette semaine : (test — récap non calculé ici, le vrai rappel calcule vos visites/appels de la semaine)
+
+« ${v.txt} » — ${v.ref}
+
+Fraternellement,
+Commission Témoignage — EEAM Fès`;
+    await window._upsertCommunication(`${testCle}_hebdo`, {
+      type: 'hebdo', evId: ev.id, evNom: ev.nom, evEmail: ev.email, cle: testCle,
+      contenu, statut: 'attente', createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } else {
+    const collegues = (S.evs || []).filter(e => e.disponible && e.id !== ev.id && e.equipe === ev.equipe);
+    const nomsCollegues = collegues.length ? collegues.map(e => e.nom).join(', ') : 'aucun signalé pour l\'instant';
+    const v = versets[1];
+    const contenu =
+`Bonjour ${ev.nom},
+
+Nouveau mois, nouvelle occasion de marcher aux côtés de ceux que vous suivez ! 🚶
+
+Pensez à programmer une visite accompagnée ce mois-ci pour vos ${fiches.length} fiche(s) :
+${fiches.length ? fiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n') : '• (aucune fiche assignée actuellement)'}
+
+👥 Accompagnateur(s) suggéré(s) : ${nomsCollegues}
+
+« ${v.txt} » — ${v.ref}
+
+Fraternellement,
+Commission Témoignage — EEAM Fès`;
+    await window._upsertCommunication(`${testCle}_visite`, {
+      type: 'visite_mois', evId: ev.id, evNom: ev.nom, evEmail: ev.email, cle: testCle,
+      contenu, statut: 'attente', createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+  toast(`✅ Rappel de test généré pour ${ev.nom} — voir la file d'envoi ci-dessous`);
+}
+
 function initCommunications() {
+  populateCommManuelSelect();
   if (!S.unsubCommunications) {
     S.unsubCommunications = window._listenCommunications(list => {
       S.commQueue = list;
@@ -5572,6 +5664,13 @@ const _COMM_TYPE_LABELS = {
   hebdo:       '📅 Rappel hebdomadaire',
   visite_mois: '🚶 Rappel visite mensuelle',
   sortie:      '🚌 Invitation sortie collective',
+  manuel:      '✍️ Message de la responsable',
+};
+const _COMM_BADGES = {
+  hebdo:       '📅 Rappel hebdomadaire',
+  visite_mois: '🚶 Rappel visite mensuelle',
+  sortie:      '🚌 Invitation — Sortie collective',
+  manuel:      '✍️ Message de la Commission',
 };
 
 function renderCommQueue() {
@@ -5592,6 +5691,7 @@ function renderCommQueue() {
       <div style="display:flex;gap:8px;margin-top:10px;">
         <button class="btn btn-primary" style="flex:2;" onclick="envoyerCommunication('${c.id}')">📧 Envoyer</button>
         <button class="btn btn-outline" style="flex:1;" onclick="ignorerCommunication('${c.id}')">Ignorer</button>
+        <button class="btn-icon" title="Supprimer définitivement" onclick="supprimerCommunicationDef('${c.id}')">🗑️</button>
       </div>
     </div>`).join('');
 }
@@ -5608,7 +5708,11 @@ function renderCommHistorique() {
     <div style="padding:10px 0;border-bottom:1px solid var(--bo);font-size:12.5px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
         <strong>${_COMM_TYPE_LABELS[c.type] || ''} — ${_esc(c.evNom || '')}</strong>
-        <span style="font-weight:700;color:${c.statut === 'envoye' ? 'var(--ok)' : 'var(--mu)'};">${c.statut === 'envoye' ? '✅ Envoyé' : '— Ignoré'}</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-weight:700;color:${c.statut === 'envoye' ? 'var(--ok)' : 'var(--mu)'};">${c.statut === 'envoye' ? '✅ Envoyé' : '— Ignoré'}</span>
+          <button class="btn-icon" title="Renvoyer (remet dans la file, modifiable)" onclick="remettreEnAttenteCommunication('${c.id}')">🔁</button>
+          <button class="btn-icon" title="Supprimer définitivement" onclick="supprimerCommunicationDef('${c.id}')">🗑️</button>
+        </div>
       </div>
     </div>`).join('');
 }
@@ -5618,24 +5722,27 @@ async function envoyerCommunication(id) {
   if (!c) return;
   const contenu = document.getElementById(`comm-txt-${id}`)?.value.trim() || c.contenu;
   if (!c.evEmail) { toast('❌ Aucun email pour cet évangéliste — ajoutez-en un dans sa fiche évangéliste'); return; }
+  const btn = document.querySelector(`#comm-txt-${id}`)?.closest('div')?.querySelector('.btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Envoi…'; }
   try {
-    // NB : réutilise le template EmailJS existant (template_vkamgqr).
-    // Si le rendu du contenu long ne convient pas, prévoir un template EmailJS
-    // dédié avec un champ "corps_message" en texte libre.
-    await _ejsSend(_EJS.service, _EJS.template, {
-      to_email:    c.evEmail,
-      ev_nom:      c.evNom || 'Évangéliste',
-      fiche_nom:   '',
-      action:      contenu,
-      action_date: new Date().toISOString().slice(0, 10),
-      verset:      '',
-      verset_ref:  '',
+    const badge   = _COMM_BADGES[c.type] || '📧 Communication';
+    const htmlMsg = _buildCommunicationHTML(badge, contenu);
+    // Réutilise le template "rapport" (HTML riche) plutôt que le template
+    // court "rappel agenda" — même charte graphique que les rapports envoyés.
+    await _ejsSend(_EJS.service, _EJS.templateRapport, {
+      to_email:        c.evEmail,
+      action:          htmlMsg,
+      ficheNom:        `${badge} — ${c.evNom || ''}`,
+      evNom:           'Commission Témoignage — Paroisse de Fès',
+      prochaineAction: contenu,
+      email:           c.evEmail
     }, 'communication-manuelle');
     await window._envoyerCommunication(id, { contenu });
     toast('✅ Communication envoyée à ' + c.evNom);
   } catch (e) {
     console.error(e);
     toast('❌ Erreur lors de l\'envoi');
+    if (btn) { btn.disabled = false; btn.textContent = '📧 Envoyer'; }
   }
 }
 
@@ -5647,6 +5754,76 @@ async function ignorerCommunication(id) {
   } catch (e) {
     console.error(e);
     toast('❌ Erreur');
+  }
+}
+
+/* ── Renvoyer une communication déjà traitée (historique → file d'attente) ──
+   Autant de fois que le/la responsable le souhaite : le contenu original
+   est remis dans la file, modifiable avant un nouvel envoi. ── */
+async function remettreEnAttenteCommunication(id) {
+  try {
+    await window._remettreEnAttenteCommunication(id);
+    toast('↩️ Remis dans la file d\'envoi — modifiable ci-dessus');
+    switchTab('communications', document.querySelector('[onclick*="communications"]'));
+  } catch (e) {
+    console.error(e);
+    toast('❌ Erreur');
+  }
+}
+
+async function supprimerCommunicationDef(id) {
+  if (!confirm('Supprimer définitivement cette communication ? Cette action est irréversible.')) return;
+  try {
+    await window._supprimerCommunication(id);
+    toast('🗑️ Supprimée définitivement');
+  } catch (e) {
+    console.error(e);
+    toast('❌ Erreur suppression');
+  }
+}
+
+/* ── Envoi manuel libre : la responsable écrit et envoie ce qu'elle veut,
+   à un évangéliste ou à tous les actifs, sans attendre un rappel auto. ── */
+function populateCommManuelSelect() {
+  const sel = document.getElementById('comm-manuel-dest');
+  if (!sel) return;
+  const actifs = (S.evs || []).filter(e => e.actif !== false && e.email);
+  sel.innerHTML = '<option value="__tous__">👥 Tous les évangélistes actifs (' + actifs.length + ')</option>'
+    + actifs.map(e => `<option value="${e.id}">${_esc(e.nom)}</option>`).join('');
+}
+
+async function envoyerCommunicationManuelle() {
+  const sel     = document.getElementById('comm-manuel-dest');
+  const texte   = document.getElementById('comm-manuel-texte')?.value.trim();
+  const btn     = document.getElementById('comm-manuel-btn');
+  if (!texte) { toast('⚠️ Écrivez un message avant d\'ajouter à la file'); return; }
+  const destId  = sel?.value;
+  const actifs  = (S.evs || []).filter(e => e.actif !== false && e.email);
+  const cibles  = destId === '__tous__' ? actifs : actifs.filter(e => e.id === destId);
+  if (!cibles.length) { toast('❌ Aucun destinataire valide (email manquant ?)'); return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Ajout…'; }
+  try {
+    const ts = Date.now();
+    for (const ev of cibles) {
+      await window._upsertCommunication(`manuel_${ts}_${ev.id}`, {
+        type:      'manuel',
+        evId:      ev.id,
+        evNom:     ev.nom,
+        evEmail:   ev.email,
+        cle:       `manuel_${ts}`,
+        contenu:   texte,
+        statut:    'attente',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    toast(`✅ Message ajouté à la file pour ${cibles.length} évangéliste(s)`);
+    document.getElementById('comm-manuel-texte').value = '';
+  } catch (e) {
+    console.error(e);
+    toast('❌ Erreur ajout à la file');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '➕ Ajouter à la file d\'envoi'; }
   }
 }
 
