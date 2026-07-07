@@ -2971,6 +2971,9 @@ window._ignorerCommunication = (id) => {
 window._remettreEnAttenteCommunication = (id) => {
   return db.collection('communications_queue').doc(id).update({
     statut: 'attente',
+    emailEnvoye: false,
+    notifEnvoyee: false,
+    pushDemande: false,
     remisEnAttenteAt: firebase.firestore.FieldValue.serverTimestamp()
   });
 };
@@ -5589,16 +5592,20 @@ function _buildCommunicationHTML(titreBadge, contenuTexte) {
    sans attendre la vraie date, pour vérifier le circuit sans polluer avec
    des données fictives. ── */
 async function forcerTestRappel(type) {
-  const ev = (S.evs || []).find(e => e.actif !== false && e.email);
-  if (!ev) { toast('❌ Aucun évangéliste actif avec un email trouvé — ajoutez un email dans une fiche évangéliste'); return; }
+  const actifs = (S.evs || []).filter(e => e.actif !== false);
+  if (!actifs.length) { toast('❌ Aucun évangéliste actif trouvé'); return; }
 
-  const fiches = getFiches().filter(f => f.evangelisteId === ev.id && !f.deleted);
-  const now = new Date();
   const testCle = `TEST-${Date.now()}`;
+  let count = 0;
 
-  if (type === 'hebdo') {
-    const v = versets[0];
-    const contenu =
+  for (const ev of actifs) {
+    const fiches = getFiches().filter(f => f.evangelisteId === ev.id && !f.deleted);
+    let contenu, docSuffix;
+
+    if (type === 'hebdo') {
+      const v = versets[0];
+      docSuffix = 'hebdo';
+      contenu =
 `Bonjour ${ev.nom},
 
 Belle semaine à vous ! 🙏 Voici votre point hebdomadaire de la Commission Témoignage :
@@ -5606,21 +5613,18 @@ Belle semaine à vous ! 🙏 Voici votre point hebdomadaire de la Commission Té
 📋 Vos fiches à contacter d'ici lundi (${fiches.length}) :
 ${fiches.length ? fiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n') : '• (aucune fiche assignée actuellement)'}
 
-📊 Cette semaine : (test — récap non calculé ici, le vrai rappel calcule vos visites/appels de la semaine)
+📊 Cette semaine : (test — le vrai rappel calcule vos visites/appels de la semaine)
 
 « ${v.txt} » — ${v.ref}
 
 Fraternellement,
 Commission Témoignage — EEAM Fès`;
-    await window._upsertCommunication(`${testCle}_hebdo`, {
-      type: 'hebdo', evId: ev.id, evNom: ev.nom, evEmail: ev.email, cle: testCle,
-      contenu, statut: 'attente', createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-  } else {
-    const collegues = (S.evs || []).filter(e => e.disponible && e.id !== ev.id && e.equipe === ev.equipe);
-    const nomsCollegues = collegues.length ? collegues.map(e => e.nom).join(', ') : 'aucun signalé pour l\'instant';
-    const v = versets[1];
-    const contenu =
+    } else {
+      const collegues = (S.evs || []).filter(e => e.disponible && e.id !== ev.id && e.equipe === ev.equipe);
+      const nomsCollegues = collegues.length ? collegues.map(e => e.nom).join(', ') : 'aucun signalé pour l\'instant';
+      const v = versets[1];
+      docSuffix = 'visite';
+      contenu =
 `Bonjour ${ev.nom},
 
 Nouveau mois, nouvelle occasion de marcher aux côtés de ceux que vous suivez ! 🚶
@@ -5634,12 +5638,25 @@ ${fiches.length ? fiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n') : '• 
 
 Fraternellement,
 Commission Témoignage — EEAM Fès`;
-    await window._upsertCommunication(`${testCle}_visite`, {
-      type: 'visite_mois', evId: ev.id, evNom: ev.nom, evEmail: ev.email, cle: testCle,
-      contenu, statut: 'attente', createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }
+
+    await window._upsertCommunication(`${testCle}_${ev.id}_${docSuffix}`, {
+      type:          type,
+      evId:          ev.id,
+      evNom:         ev.nom,
+      evEmail:       ev.email || null,
+      cle:           testCle,
+      contenu,
+      nbFiches:      fiches.length,
+      statut:        'attente',
+      emailEnvoye:   false,
+      notifEnvoyee:  false,
+      pushDemande:   false,
+      createdAt:     firebase.firestore.FieldValue.serverTimestamp()
     });
+    count++;
   }
-  toast(`✅ Rappel de test généré pour ${ev.nom} — voir la file d'envoi ci-dessous`);
+  toast(`✅ ${count} rappel(s) de test généré(s) — un pour chaque évangéliste actif`);
 }
 
 function initCommunications() {
@@ -5681,18 +5698,37 @@ function renderCommQueue() {
     el.innerHTML = '<div class="empty-state"><div class="ico">✅</div><p>Aucune communication en attente — tout est à jour</p></div>';
     return;
   }
-  el.innerHTML = list.map(c => `
-    <div style="background:var(--surface);border:1.5px solid var(--bo);border-radius:12px;padding:14px 16px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
-        <div style="font-weight:700;font-size:13px;">${_COMM_TYPE_LABELS[c.type] || '📧 Rappel'} — ${_esc(c.evNom || 'Évangéliste')}</div>
-        <span style="font-size:11px;color:var(--mu);">${c.evEmail ? _esc(c.evEmail) : "⚠️ pas d'email renseigné"}</span>
+
+  // Regroupement par évangéliste : tout ce qu'il y a à envoyer pour
+  // chacun se charge ensemble, dans une seule carte par personne.
+  const parEv = {};
+  list.forEach(c => {
+    const key = c.evId || c.id;
+    if (!parEv[key]) parEv[key] = { evNom: c.evNom || 'Évangéliste', evEmail: c.evEmail, items: [] };
+    parEv[key].items.push(c);
+  });
+
+  el.innerHTML = Object.values(parEv).map(grp => `
+    <div style="background:var(--surface);border:1.5px solid var(--bo);border-radius:14px;padding:14px 16px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--bo);padding-bottom:8px;">
+        <div style="font-weight:800;font-size:14px;">👤 ${_esc(grp.evNom)}</div>
+        <span style="font-size:11px;color:var(--mu);">${grp.evEmail ? _esc(grp.evEmail) : "⚠️ pas d'email renseigné"}</span>
       </div>
-      <textarea id="comm-txt-${c.id}" rows="7" style="width:100%;font-family:'DM Sans',sans-serif;font-size:13px;padding:10px;border:1.5px solid var(--bo);border-radius:8px;background:var(--bg);color:var(--tx);resize:vertical;white-space:pre-wrap;">${_esc(c.contenu || '')}</textarea>
-      <div style="display:flex;gap:8px;margin-top:10px;">
-        <button class="btn btn-primary" style="flex:2;" onclick="envoyerCommunication('${c.id}')">📧 Envoyer</button>
-        <button class="btn btn-outline" style="flex:1;" onclick="ignorerCommunication('${c.id}')">Ignorer</button>
-        <button class="btn-icon" title="Supprimer définitivement" onclick="supprimerCommunicationDef('${c.id}')">🗑️</button>
-      </div>
+      ${grp.items.map(c => `
+        <div style="margin-bottom:14px;padding-bottom:14px;${grp.items.indexOf(c) < grp.items.length - 1 ? 'border-bottom:1px dashed var(--bo);' : ''}">
+          <div style="font-size:12px;font-weight:700;color:var(--c1);margin-bottom:6px;">${_COMM_TYPE_LABELS[c.type] || '📧 Rappel'}</div>
+          <textarea id="comm-txt-${c.id}" rows="6" style="width:100%;font-family:'DM Sans',sans-serif;font-size:13px;padding:10px;border:1.5px solid var(--bo);border-radius:8px;background:var(--bg);color:var(--tx);resize:vertical;white-space:pre-wrap;">${_esc(c.contenu || '')}</textarea>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <button class="btn ${c.emailEnvoye ? '' : 'btn-primary'}" style="flex:1;${c.emailEnvoye ? 'opacity:.55;' : ''}" ${!c.evEmail || c.emailEnvoye ? 'disabled' : ''} onclick="envoyerCommunicationEmail('${c.id}')">
+              ${c.emailEnvoye ? '✅ Email envoyé' : "📧 Envoyer l'email"}
+            </button>
+            <button class="btn ${c.notifEnvoyee ? '' : 'btn-primary'}" style="flex:1;${c.notifEnvoyee ? 'opacity:.55;' : ''}" ${c.notifEnvoyee ? 'disabled' : ''} onclick="envoyerCommunicationNotif('${c.id}')">
+              ${c.notifEnvoyee ? '✅ Notif envoyée' : '🔔 Envoyer la notification'}
+            </button>
+            <button class="btn btn-outline" onclick="ignorerCommunication('${c.id}')">Ignorer</button>
+            <button class="btn-icon" title="Supprimer définitivement" onclick="supprimerCommunicationDef('${c.id}')">🗑️</button>
+          </div>
+        </div>`).join('')}
     </div>`).join('');
 }
 
@@ -5717,18 +5753,24 @@ function renderCommHistorique() {
     </div>`).join('');
 }
 
-async function envoyerCommunication(id) {
+/* Vérifie si les deux actions (email + notif) sont faites pour clôturer
+   la communication et la faire passer à l'historique. */
+async function _finaliserSiComplet(id, c) {
+  if (c.emailEnvoye && c.notifEnvoyee) {
+    await window._envoyerCommunication(id, {});
+  }
+}
+
+async function envoyerCommunicationEmail(id) {
   const c = (S.commQueue || []).find(x => x.id === id);
   if (!c) return;
   const contenu = document.getElementById(`comm-txt-${id}`)?.value.trim() || c.contenu;
   if (!c.evEmail) { toast('❌ Aucun email pour cet évangéliste — ajoutez-en un dans sa fiche évangéliste'); return; }
-  const btn = document.querySelector(`#comm-txt-${id}`)?.closest('div')?.querySelector('.btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Envoi…'; }
   try {
     const badge   = _COMM_BADGES[c.type] || '📧 Communication';
     const htmlMsg = _buildCommunicationHTML(badge, contenu);
-    // Réutilise le template "rapport" (HTML riche) plutôt que le template
-    // court "rappel agenda" — même charte graphique que les rapports envoyés.
+    // Réutilise le template "rapport" (HTML riche) — même charte graphique
+    // que les rapports envoyés, plutôt que le petit template court.
     await _ejsSend(_EJS.service, _EJS.templateRapport, {
       to_email:        c.evEmail,
       action:          htmlMsg,
@@ -5737,12 +5779,36 @@ async function envoyerCommunication(id) {
       prochaineAction: contenu,
       email:           c.evEmail
     }, 'communication-manuelle');
-    await window._envoyerCommunication(id, { contenu });
-    toast('✅ Communication envoyée à ' + c.evNom);
+    await window._upsertCommunication(id, { contenu, emailEnvoye: true, emailEnvoyeAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await _finaliserSiComplet(id, { ...c, emailEnvoye: true });
+    toast('✅ Email envoyé à ' + c.evNom);
   } catch (e) {
     console.error(e);
-    toast('❌ Erreur lors de l\'envoi');
-    if (btn) { btn.disabled = false; btn.textContent = '📧 Envoyer'; }
+    toast('❌ Erreur lors de l\'envoi de l\'email');
+  }
+}
+
+/* Notification : la notif interne (cloche dans l'app) part immédiatement.
+   La notification "physique" sur le téléphone (push) est demandée ici et
+   sera délivrée par le script automatique au prochain passage (quelques
+   minutes) — un vrai push nécessite une clé serveur que le navigateur n'a
+   pas, d'où ce léger délai, inévitable avec une architecture 100% gratuite. */
+async function envoyerCommunicationNotif(id) {
+  const c = (S.commQueue || []).find(x => x.id === id);
+  if (!c) return;
+  try {
+    await window._pushNotif(c.evId, `${_COMM_BADGES[c.type] || '📧'} — voir l'app pour le détail.`, c.type);
+    await window._upsertCommunication(id, {
+      notifEnvoyee: true,
+      notifEnvoyeeAt: firebase.firestore.FieldValue.serverTimestamp(),
+      pushDemande: true,
+      pushDemandeAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await _finaliserSiComplet(id, { ...c, notifEnvoyee: true });
+    toast('🔔 Notification envoyée (bannière téléphone dans quelques minutes)');
+  } catch (e) {
+    console.error(e);
+    toast('❌ Erreur lors de l\'envoi de la notification');
   }
 }
 
@@ -5807,14 +5873,17 @@ async function envoyerCommunicationManuelle() {
     const ts = Date.now();
     for (const ev of cibles) {
       await window._upsertCommunication(`manuel_${ts}_${ev.id}`, {
-        type:      'manuel',
-        evId:      ev.id,
-        evNom:     ev.nom,
-        evEmail:   ev.email,
-        cle:       `manuel_${ts}`,
-        contenu:   texte,
-        statut:    'attente',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        type:          'manuel',
+        evId:          ev.id,
+        evNom:         ev.nom,
+        evEmail:       ev.email,
+        cle:           `manuel_${ts}`,
+        contenu:       texte,
+        statut:        'attente',
+        emailEnvoye:   false,
+        notifEnvoyee:  false,
+        pushDemande:   false,
+        createdAt:     firebase.firestore.FieldValue.serverTimestamp()
       });
     }
     toast(`✅ Message ajouté à la file pour ${cibles.length} évangéliste(s)`);
@@ -7097,23 +7166,17 @@ async function checkRappelHebdoContact() {
   } catch (e) { return; }
 
   const mesFiches = (S.myFiches || []).filter(f => !f.deleted);
-  await window._pushNotif(S.evId,
-    mesFiches.length
-      ? `📞 Rappel : contactez vos ${mesFiches.length} fiche(s) d'ici lundi.`
-      : `📞 Rappel bi-mensuel : pensez à prendre des nouvelles de vos personnes suivies d'ici lundi.`,
-    'rappel-hebdo');
 
-  if (ev.email && mesFiches.length) {
-    const v = versets[0];
-    // Récap d'activité sur la semaine écoulée (visites + appels/messages)
-    const weekAgo = new Date(now.getTime() - 7 * 86400000);
-    const actEv = (S.activities || []).filter(a =>
-      a.evangelisteId === S.evId && a.date && new Date(a.date + 'T12:00:00') >= weekAgo
-    );
-    const nbVisites   = actEv.filter(a => a.type === 'visite').length;
-    const nbAppelsMsg = actEv.filter(a => a.type === 'appel' || a.type === 'message').length;
+  const v = versets[0];
+  // Récap d'activité sur la semaine écoulée (visites + appels/messages)
+  const weekAgo = new Date(now.getTime() - 7 * 86400000);
+  const actEv = (S.activities || []).filter(a =>
+    a.evangelisteId === S.evId && a.date && new Date(a.date + 'T12:00:00') >= weekAgo
+  );
+  const nbVisites   = actEv.filter(a => a.type === 'visite').length;
+  const nbAppelsMsg = actEv.filter(a => a.type === 'appel' || a.type === 'message').length;
 
-    const contenu =
+  const contenu = mesFiches.length ?
 `Bonjour ${ev.nom},
 
 Belle semaine à vous ! 🙏 Voici votre point hebdomadaire de la Commission Témoignage :
@@ -7126,19 +7189,32 @@ ${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
 « ${v.txt} » — ${v.ref}
 
 Fraternellement,
+Commission Témoignage — EEAM Fès` :
+`Bonjour ${ev.nom},
+
+Belle semaine à vous ! 🙏 Petit rappel bi-mensuel de la Commission Témoignage : pensez à prendre des nouvelles des personnes que vous suivez d'ici lundi.
+
+« ${v.txt} » — ${v.ref}
+
+Fraternellement,
 Commission Témoignage — EEAM Fès`;
 
-    window._upsertCommunication(`${S.evId}_${cle}_hebdo`, {
-      type:      'hebdo',
-      evId:      S.evId,
-      evNom:     ev.nom,
-      evEmail:   ev.email,
-      cle,
-      contenu,
-      statut:    'attente',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(() => {});
-  }
+  // Mis en file pour CHAQUE évangéliste — email ET notification restent
+  // 100% manuels : rien ne part tant que le/la responsable n'a pas cliqué.
+  window._upsertCommunication(`${S.evId}_${cle}_hebdo`, {
+    type:          'hebdo',
+    evId:          S.evId,
+    evNom:         ev.nom,
+    evEmail:       ev.email || null,
+    cle,
+    contenu,
+    nbFiches:      mesFiches.length,
+    statut:        'attente',
+    emailEnvoye:   false,
+    notifEnvoyee:  false,
+    pushDemande:   false,
+    createdAt:     firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {});
 }
 
 /* Rappel : programmer une visite mensuelle accompagnée pour chaque fiche */
@@ -7167,13 +7243,8 @@ async function checkRappelVisiteMensuelle() {
     ? collegues.map(e => e.nom).join(', ')
     : 'aucun signalé pour l\'instant — voir avec la responsable de zone';
 
-  await window._pushNotif(S.evId,
-    `🚶 Ce mois-ci : programmez une visite pour vos ${mesFiches.length} fiche(s), accompagné(e) de : ${nomsCollegues}.`,
-    'rappel-visite-mois');
-
-  if (ev.email) {
-    const v = versets[1];
-    const contenu =
+  const v = versets[1];
+  const contenu =
 `Bonjour ${ev.nom},
 
 Nouveau mois, nouvelle occasion de marcher aux côtés de ceux que vous suivez ! 🚶
@@ -7188,17 +7259,20 @@ ${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
 Fraternellement,
 Commission Témoignage — EEAM Fès`;
 
-    window._upsertCommunication(`${S.evId}_${cle}_visite`, {
-      type:      'visite_mois',
-      evId:      S.evId,
-      evNom:     ev.nom,
-      evEmail:   ev.email,
-      cle,
-      contenu,
-      statut:    'attente',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(() => {});
-  }
+  window._upsertCommunication(`${S.evId}_${cle}_visite`, {
+    type:          'visite_mois',
+    evId:          S.evId,
+    evNom:         ev.nom,
+    evEmail:       ev.email || null,
+    cle,
+    contenu,
+    nbFiches:      mesFiches.length,
+    statut:        'attente',
+    emailEnvoye:   false,
+    notifEnvoyee:  false,
+    pushDemande:   false,
+    createdAt:     firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {});
 }
 
 function checkRappelsAutomatiques() {
