@@ -96,6 +96,7 @@ async function queueCommunication(docId, data) {
     emailEnvoye:  false,
     notifEnvoyee: false,
     pushDemande:  false,
+    pushEnvoye:   false,
     createdAt:    admin.firestore.FieldValue.serverTimestamp(),
     source:       'server',
   }, { merge: true });
@@ -178,7 +179,10 @@ async function runRappelHebdo(now) {
    Génère une entrée pour chaque évangéliste ayant des fiches,
    le 1er du mois, pour validation manuelle.                   */
 async function runRappelVisiteMensuelle(now) {
-  if (now.getDate() !== 1) return;
+  // Se déclenche 1 semaine avant le dernier jour du mois (pas le 1er).
+  const dernierJourMois = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const jourCible = dernierJourMois - 7;
+  if (now.getDate() !== jourCible) return;
   const cle = cleMois(now);
 
   const [evsSnap, fichesSnap] = await Promise.all([
