@@ -2009,15 +2009,6 @@ body .animate, body .spinner, body [class*="anim"] {
         <button class="btn btn-primary btn-full" id="comm-manuel-btn" onclick="envoyerCommunicationManuelle()" style="margin-top:12px;">➕ Ajouter à la file d'envoi</button>
       </div>
 
-      <div class="card" style="padding:18px;margin-bottom:14px;border:1.5px dashed var(--bo);">
-        <div class="chart-title" style="margin-bottom:4px;">🧪 Tester les rappels automatiques</div>
-        <div style="font-size:12px;color:var(--mu);margin-bottom:12px;">Génère un rappel réel (avec un vrai évangéliste et ses vraies fiches) dans la file ci-dessous, sans attendre dimanche ou le 1er du mois.</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-outline" style="flex:1;" onclick="forcerTestRappel('hebdo')">📅 Tester le rappel hebdo</button>
-          <button class="btn btn-outline" style="flex:1;" onclick="forcerTestRappel('visite_mois')">🚶 Tester le rappel visite</button>
-        </div>
-      </div>
-
       <div class="card" style="padding:18px;margin-bottom:14px;">
         <div class="chart-title" style="margin-bottom:4px;">📬 File d'envoi — en attente de validation</div>
         <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Ces rappels (hebdo, visite mensuelle) sont générés automatiquement mais ne partent qu'après votre validation. Vous pouvez modifier le contenu avant l'envoi.</div>
@@ -2932,6 +2923,7 @@ window._ajouterCompteRenduSortieCollective = (id, data) => {
    Le/la responsable les valide (et peut les modifier) avant envoi. ── */
 window._upsertCommunication = (id, data) => {
   return db.collection('communications_queue').doc(id).set({
+    pushEnvoye: false,
     ...data,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
@@ -2974,6 +2966,7 @@ window._remettreEnAttenteCommunication = (id) => {
     emailEnvoye: false,
     notifEnvoyee: false,
     pushDemande: false,
+    pushEnvoye: false,
     remisEnAttenteAt: firebase.firestore.FieldValue.serverTimestamp()
   });
 };
@@ -5591,74 +5584,6 @@ function _buildCommunicationHTML(titreBadge, contenuTexte) {
 /* ── Test manuel : génère un vrai rappel (vrai évangéliste, vraies fiches) ──
    sans attendre la vraie date, pour vérifier le circuit sans polluer avec
    des données fictives. ── */
-async function forcerTestRappel(type) {
-  const actifs = (S.evs || []).filter(e => e.actif !== false);
-  if (!actifs.length) { toast('❌ Aucun évangéliste actif trouvé'); return; }
-
-  const testCle = `TEST-${Date.now()}`;
-  let count = 0;
-
-  for (const ev of actifs) {
-    const fiches = getFiches().filter(f => f.evangelisteId === ev.id && !f.deleted);
-    let contenu, docSuffix;
-
-    if (type === 'hebdo') {
-      const v = versets[0];
-      docSuffix = 'hebdo';
-      contenu =
-`Bonjour ${ev.nom},
-
-Belle semaine à vous ! 🙏 Voici votre point hebdomadaire de la Commission Témoignage :
-
-📋 Vos fiches à contacter d'ici lundi (${fiches.length}) :
-${fiches.length ? fiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n') : '• (aucune fiche assignée actuellement)'}
-
-📊 Cette semaine : (test — le vrai rappel calcule vos visites/appels de la semaine)
-
-« ${v.txt} » — ${v.ref}
-
-Fraternellement,
-Commission Témoignage — EEAM Fès`;
-    } else {
-      const collegues = (S.evs || []).filter(e => e.disponible && e.id !== ev.id && e.equipe === ev.equipe);
-      const nomsCollegues = collegues.length ? collegues.map(e => e.nom).join(', ') : 'aucun signalé pour l\'instant';
-      const v = versets[1];
-      docSuffix = 'visite';
-      contenu =
-`Bonjour ${ev.nom},
-
-Nouveau mois, nouvelle occasion de marcher aux côtés de ceux que vous suivez ! 🚶
-
-Pensez à programmer une visite accompagnée ce mois-ci pour vos ${fiches.length} fiche(s) :
-${fiches.length ? fiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n') : '• (aucune fiche assignée actuellement)'}
-
-👥 Accompagnateur(s) suggéré(s) : ${nomsCollegues}
-
-« ${v.txt} » — ${v.ref}
-
-Fraternellement,
-Commission Témoignage — EEAM Fès`;
-    }
-
-    await window._upsertCommunication(`${testCle}_${ev.id}_${docSuffix}`, {
-      type:          type,
-      evId:          ev.id,
-      evNom:         ev.nom,
-      evEmail:       ev.email || null,
-      cle:           testCle,
-      contenu,
-      nbFiches:      fiches.length,
-      statut:        'attente',
-      emailEnvoye:   false,
-      notifEnvoyee:  false,
-      pushDemande:   false,
-      createdAt:     firebase.firestore.FieldValue.serverTimestamp()
-    });
-    count++;
-  }
-  toast(`✅ ${count} rappel(s) de test généré(s) — un pour chaque évangéliste actif`);
-}
-
 function initCommunications() {
   populateCommManuelSelect();
   if (!S.unsubCommunications) {
@@ -5695,9 +5620,14 @@ function renderCommQueue() {
   if (!el) return;
   const list = S.commQueue || [];
   if (!list.length) {
+    S._commQueueSel = new Set();
     el.innerHTML = '<div class="empty-state"><div class="ico">✅</div><p>Aucune communication en attente — tout est à jour</p></div>';
     return;
   }
+  if (!S._commQueueSel) S._commQueueSel = new Set();
+  // Retire de la sélection les éléments qui ont disparu (envoyés/supprimés ailleurs)
+  const idsPresents = new Set(list.map(c => c.id));
+  S._commQueueSel.forEach(id => { if (!idsPresents.has(id)) S._commQueueSel.delete(id); });
 
   // Regroupement par évangéliste : tout ce qu'il y a à envoyer pour
   // chacun se charge ensemble, dans une seule carte par personne.
@@ -5708,7 +5638,16 @@ function renderCommQueue() {
     parEv[key].items.push(c);
   });
 
-  el.innerHTML = Object.values(parEv).map(grp => `
+  const nbSel = S._commQueueSel.size;
+  const barre = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mu);cursor:pointer;">
+        <input type="checkbox" onchange="toggleToutCommQueue(this.checked)" ${nbSel === list.length ? 'checked' : ''}> Tout sélectionner
+      </label>
+      <button class="btn btn-outline" style="${nbSel ? '' : 'opacity:.5;pointer-events:none;'}" onclick="supprimerSelectionCommQueue()">🗑️ Supprimer la sélection (${nbSel})</button>
+    </div>`;
+
+  el.innerHTML = barre + Object.values(parEv).map(grp => `
     <div style="background:var(--surface);border:1.5px solid var(--bo);border-radius:14px;padding:14px 16px;margin-bottom:14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--bo);padding-bottom:8px;">
         <div style="font-weight:800;font-size:14px;">👤 ${_esc(grp.evNom)}</div>
@@ -5716,7 +5655,10 @@ function renderCommQueue() {
       </div>
       ${grp.items.map(c => `
         <div style="margin-bottom:14px;padding-bottom:14px;${grp.items.indexOf(c) < grp.items.length - 1 ? 'border-bottom:1px dashed var(--bo);' : ''}">
-          <div style="font-size:12px;font-weight:700;color:var(--c1);margin-bottom:6px;">${_COMM_TYPE_LABELS[c.type] || '📧 Rappel'}</div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--c1);margin-bottom:6px;cursor:pointer;">
+            <input type="checkbox" onchange="toggleSelectionCommQueue('${c.id}', this.checked)" ${S._commQueueSel.has(c.id) ? 'checked' : ''}>
+            ${_COMM_TYPE_LABELS[c.type] || '📧 Rappel'}
+          </label>
           <textarea id="comm-txt-${c.id}" rows="6" style="width:100%;font-family:'DM Sans',sans-serif;font-size:13px;padding:10px;border:1.5px solid var(--bo);border-radius:8px;background:var(--bg);color:var(--tx);resize:vertical;white-space:pre-wrap;">${_esc(c.contenu || '')}</textarea>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
             <button class="btn ${c.emailEnvoye ? '' : 'btn-primary'}" style="flex:1;${c.emailEnvoye ? 'opacity:.55;' : ''}" ${!c.evEmail || c.emailEnvoye ? 'disabled' : ''} onclick="envoyerCommunicationEmail('${c.id}')">
@@ -5732,18 +5674,58 @@ function renderCommQueue() {
     </div>`).join('');
 }
 
+function toggleSelectionCommQueue(id, checked) {
+  if (!S._commQueueSel) S._commQueueSel = new Set();
+  if (checked) S._commQueueSel.add(id); else S._commQueueSel.delete(id);
+  renderCommQueue();
+}
+function toggleToutCommQueue(checked) {
+  S._commQueueSel = checked ? new Set((S.commQueue || []).map(c => c.id)) : new Set();
+  renderCommQueue();
+}
+async function supprimerSelectionCommQueue() {
+  const ids = Array.from(S._commQueueSel || []);
+  if (!ids.length) return;
+  if (!confirm(`Supprimer définitivement ${ids.length} communication(s) sélectionnée(s) ? Cette action est irréversible.`)) return;
+  try {
+    await Promise.all(ids.map(id => window._supprimerCommunication(id)));
+    S._commQueueSel = new Set();
+    toast(`🗑️ ${ids.length} communication(s) supprimée(s)`);
+  } catch (e) {
+    console.error(e);
+    toast('❌ Erreur suppression multiple');
+  }
+}
+
 function renderCommHistorique() {
   const el = document.getElementById('comm-historique-list');
   if (!el) return;
   const list = S.commHisto || [];
   if (!list.length) {
+    S._commHistoSel = new Set();
     el.innerHTML = '<div class="empty-state"><div class="ico">📭</div><p>Aucun historique pour le moment</p></div>';
     return;
   }
-  el.innerHTML = list.map(c => `
+  if (!S._commHistoSel) S._commHistoSel = new Set();
+  const idsPresents = new Set(list.map(c => c.id));
+  S._commHistoSel.forEach(id => { if (!idsPresents.has(id)) S._commHistoSel.delete(id); });
+
+  const nbSel = S._commHistoSel.size;
+  const barre = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mu);cursor:pointer;">
+        <input type="checkbox" onchange="toggleToutCommHisto(this.checked)" ${nbSel === list.length ? 'checked' : ''}> Tout sélectionner
+      </label>
+      <button class="btn btn-outline" style="${nbSel ? '' : 'opacity:.5;pointer-events:none;'}" onclick="supprimerSelectionCommHisto()">🗑️ Supprimer la sélection (${nbSel})</button>
+    </div>`;
+
+  el.innerHTML = barre + list.map(c => `
     <div style="padding:10px 0;border-bottom:1px solid var(--bo);font-size:12.5px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
-        <strong>${_COMM_TYPE_LABELS[c.type] || ''} — ${_esc(c.evNom || '')}</strong>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" onchange="toggleSelectionCommHisto('${c.id}', this.checked)" ${S._commHistoSel.has(c.id) ? 'checked' : ''}>
+          <strong>${_COMM_TYPE_LABELS[c.type] || ''} — ${_esc(c.evNom || '')}</strong>
+        </label>
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-weight:700;color:${c.statut === 'envoye' ? 'var(--ok)' : 'var(--mu)'};">${c.statut === 'envoye' ? '✅ Envoyé' : '— Ignoré'}</span>
           <button class="btn-icon" title="Renvoyer (remet dans la file, modifiable)" onclick="remettreEnAttenteCommunication('${c.id}')">🔁</button>
@@ -5751,6 +5733,29 @@ function renderCommHistorique() {
         </div>
       </div>
     </div>`).join('');
+}
+
+function toggleSelectionCommHisto(id, checked) {
+  if (!S._commHistoSel) S._commHistoSel = new Set();
+  if (checked) S._commHistoSel.add(id); else S._commHistoSel.delete(id);
+  renderCommHistorique();
+}
+function toggleToutCommHisto(checked) {
+  S._commHistoSel = checked ? new Set((S.commHisto || []).map(c => c.id)) : new Set();
+  renderCommHistorique();
+}
+async function supprimerSelectionCommHisto() {
+  const ids = Array.from(S._commHistoSel || []);
+  if (!ids.length) return;
+  if (!confirm(`Supprimer définitivement ${ids.length} communication(s) sélectionnée(s) ? Cette action est irréversible.`)) return;
+  try {
+    await Promise.all(ids.map(id => window._supprimerCommunication(id)));
+    S._commHistoSel = new Set();
+    toast(`🗑️ ${ids.length} communication(s) supprimée(s)`);
+  } catch (e) {
+    console.error(e);
+    toast('❌ Erreur suppression multiple');
+  }
 }
 
 /* Vérifie si les deux actions (email + notif) sont faites pour clôturer
@@ -7221,7 +7226,10 @@ Commission Témoignage — EEAM Fès`;
 async function checkRappelVisiteMensuelle() {
   if (!S.evId) return;
   const now = new Date();
-  if (now.getDate() > 3) return; // fenêtre de rattrapage : 3 premiers jours du mois
+  // Se déclenche 1 semaine avant le dernier jour du mois (pas le 1er du mois).
+  const dernierJourMois = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const jourCible = dernierJourMois - 7;
+  if (now.getDate() < jourCible || now.getDate() > jourCible + 2) return; // fenêtre de rattrapage : 3 jours
   const cle = _cleMois(now);
 
   const ev = (S.evs || []).find(e => e.id === S.evId);
