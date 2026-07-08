@@ -990,10 +990,11 @@ body {
 
 /* ── EV PERFORMANCE ────────────────────────────────── */
 .ev-perf-bar {
-  height: 6px; border-radius: 3px; background: var(--bg2);
-  margin-top: 6px; overflow: hidden;
+  height: 8px; border-radius: 20px; background: var(--bg2);
+  margin-top: 8px; overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.06);
 }
-.ev-perf-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg,var(--c1),var(--c3)); transition: width .4s ease; }
+.ev-perf-fill { height: 100%; border-radius: 20px; transition: width .5s cubic-bezier(.4,0,.2,1); }
 
 /* ── MODAL LARGE ───────────────────────────────────── */
 .modal-lg { max-width: 700px; }
@@ -1374,6 +1375,12 @@ body .animate, body .spinner, body [class*="anim"] {
 .equipe-ville   { background:rgba(26,122,58,0.12);color:var(--ok); }
 .equipe-autre   { background:rgba(100,100,100,0.12);color:#555; }
 
+.btn-icon { background:none; border:none; cursor:pointer; font-size:15px; padding:4px 6px; border-radius:6px; opacity:.7; }
+.btn-icon:hover { opacity:1; background:var(--bg2); }
+.btn-mic { position:absolute; right:8px; bottom:8px; width:30px; height:30px; border-radius:50%; border:1.5px solid var(--bo); background:var(--surface); cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+.btn-mic:hover { border-color:var(--c1); }
+.btn-mic.mic-on { background:var(--c1); border-color:var(--c1); animation:micPulse 1.2s infinite; }
+@keyframes micPulse { 0%,100% { box-shadow:0 0 0 0 rgba(184,24,24,.5); } 50% { box-shadow:0 0 0 8px rgba(184,24,24,0); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }</style>
 </head>
 <body>
@@ -1660,6 +1667,28 @@ body .animate, body .spinner, body [class*="anim"] {
         </select>
 
       </div>
+
+      <button type="button" onclick="toggleFiltresAvances()" id="btn-filtres-avances" style="background:none;border:none;color:var(--c1);font-size:12.5px;font-weight:700;padding:6px 2px;cursor:pointer;display:flex;align-items:center;gap:5px;">
+        <span id="filtres-avances-arrow">▸</span> Filtres avancés
+      </button>
+      <div id="filtres-avances-panel" style="display:none;background:var(--surface);border:1.5px solid var(--bo);border-radius:12px;padding:12px 14px;margin-bottom:12px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
+          <select id="db-fbaptise" onchange="renderFiches()">
+            <option value="">Baptisé — tous</option>
+            <option value="oui">💧 Baptisé</option>
+            <option value="non">Non baptisé</option>
+          </select>
+          <select id="db-fsexe" onchange="renderFiches()">
+            <option value="">Sexe — tous</option>
+            <option value="M">♂ Homme</option>
+            <option value="F">♀ Femme</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--tx);cursor:pointer;">
+            <input type="checkbox" id="db-ffroide" onchange="renderFiches()"> 🧊 Fiches froides uniquement
+          </label>
+        </div>
+      </div>
+
       <div class="fiche-list" id="fiche-list">
         <div class="empty-state"><div class="ico">⏳</div><p>Chargement en cours…</p></div>
       </div>
@@ -1868,6 +1897,14 @@ body .animate, body .spinner, body [class*="anim"] {
         <div class="retards-body" id="suivi-retards-list"></div>
       </div>
 
+      <!-- BLOC ÉVANGÉLISTES À RELANCER (inactivité) -->
+      <div id="suivi-relance-wrap" style="display:none;margin-bottom:16px;">
+        <div class="card" style="padding:16px;border:1.5px solid rgba(184,106,0,0.35);">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--wa);margin-bottom:10px;">🔔 À relancer personnellement</div>
+          <div id="suivi-relance-list"></div>
+        </div>
+      </div>
+
       <!-- FORMULAIRE RAPIDE RESPONSABLE -->
       <div class="card" style="padding:16px;margin-bottom:16px;">
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--c1);margin-bottom:12px;">➕ Enregistrer une activité</div>
@@ -1885,7 +1922,10 @@ body .animate, body .spinner, body [class*="anim"] {
           <input type="date" id="act-date" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
           <input type="number" id="act-duree" placeholder="Durée (min)" min="1" max="300" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
         </div>
-        <textarea id="act-note" placeholder="Compte-rendu *" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical;min-height:70px;width:100%;margin-bottom:10px;color:var(--tx);"></textarea>
+        <div style="position:relative;">
+          <textarea id="act-note" placeholder="Compte-rendu (optionnel — ou dictez avec le micro 🎤)" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 40px 9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical;min-height:70px;width:100%;margin-bottom:10px;color:var(--tx);"></textarea>
+          <button type="button" class="btn-mic" id="act-note-mic" onclick="toggleDictee('act-note','act-note-mic')" title="Dicter le compte-rendu">🎤</button>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
           <input type="text" id="act-next" placeholder="Prochaine action (ex: Rappeler…)" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
           <input type="date" id="act-next-date" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
@@ -3517,6 +3557,116 @@ function populateEvFilter() {
   }
 }
 
+/* ── CONTACT RAPIDE : log une activité en 1 clic, sans formulaire ──
+   Compte-rendu par défaut auto-rempli — l'objectif est qu'il n'y ait
+   plus AUCUNE excuse pour ne pas enregistrer un contact effectué. ── */
+/* ── DICTÉE VOCALE : reconnaissance vocale du navigateur (gratuit, sans
+   serveur), avec nettoyage automatique basique du texte transcrit. ── */
+const _dicteeActive = {}; // { textareaId: SpeechRecognition instance en cours }
+
+function _nettoyerTranscription(texte) {
+  let t = (texte || '').trim();
+  if (!t) return t;
+  t = t.charAt(0).toUpperCase() + t.slice(1);      // majuscule au début
+  t = t.replace(/\s+([,.!?])/g, '$1');              // pas d'espace avant ponctuation
+  t = t.replace(/([,.!?])(?=[^\s])/g, '$1 ');        // espace après ponctuation
+  if (!/[.!?]$/.test(t)) t += '.';                  // point final si absent
+  return t;
+}
+
+function toggleDictee(textareaId, btnId) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const btn = document.getElementById(btnId);
+  const textarea = document.getElementById(textareaId);
+  if (!textarea) return;
+
+  if (!SpeechRecognition) {
+    toast('⚠️ Dictée vocale non disponible sur ce navigateur (essayez Chrome sur Android)');
+    return;
+  }
+
+  // Si une dictée est déjà en cours sur ce champ, on l'arrête (bouton = interrupteur)
+  if (_dicteeActive[textareaId]) {
+    _dicteeActive[textareaId].stop();
+    return;
+  }
+
+  const rec = new SpeechRecognition();
+  rec.lang = 'fr-FR';
+  rec.continuous = true;
+  rec.interimResults = false;
+
+  const baseTexte = textarea.value.trim();
+
+  rec.onstart = () => {
+    _dicteeActive[textareaId] = rec;
+    if (btn) { btn.classList.add('mic-on'); btn.title = 'Arrêter la dictée'; }
+  };
+  rec.onresult = (e) => {
+    let transcrit = '';
+    for (let i = 0; i < e.results.length; i++) transcrit += e.results[i][0].transcript;
+    const propre = _nettoyerTranscription(transcrit);
+    textarea.value = baseTexte ? `${baseTexte} ${propre}` : propre;
+  };
+  rec.onerror = (e) => {
+    if (e.error !== 'no-speech' && e.error !== 'aborted') {
+      toast('⚠️ Erreur dictée : ' + e.error);
+    }
+  };
+  rec.onend = () => {
+    delete _dicteeActive[textareaId];
+    if (btn) { btn.classList.remove('mic-on'); btn.title = 'Dicter le compte-rendu'; }
+  };
+
+  try {
+    rec.start();
+  } catch (e) {
+    toast('❌ Impossible de démarrer la dictée');
+  }
+}
+
+async function quickLogActivity(ficheId, type, event) {
+  if (event) event.stopPropagation();
+  const fiche = S.fiches.find(f => f.id === ficheId);
+  if (!fiche) return;
+  const today = new Date().toISOString().split('T')[0];
+  const noteDefaut = { appel: 'Appel effectué', visite: 'Visite effectuée', message: 'Message envoyé' }[type] || 'Contact effectué';
+
+  try {
+    await window._saveActivity({
+      ficheId,
+      ficheNom:      `${fiche.nom || ''} ${fiche.prenom || ''}`.trim(),
+      type, date: today,
+      duree:         null,
+      note:          noteDefaut,
+      nextAction:    null,
+      nextActionDate: null,
+      parId:         S.evId || 'admin',
+      parNom:        S.evNom || 'Responsable',
+      evangelisteId: fiche.evangelisteId || S.evId || null,
+    });
+    // Une visite fait passer la fiche au statut "visité" (repère visuel utile pour la responsable)
+    if (type === 'visite' && fiche.statut !== 'visite') {
+      await db.collection('fiches').doc(ficheId).update({
+        statut: 'visite', updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(() => {});
+    }
+    toast(`✅ ${noteDefaut} — ${fiche.nom}`);
+  } catch (e) {
+    console.error(e);
+    toast('❌ Erreur lors de l\'enregistrement');
+  }
+}
+
+function toggleFiltresAvances() {
+  const panel = document.getElementById('filtres-avances-panel');
+  const arrow = document.getElementById('filtres-avances-arrow');
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.textContent = isOpen ? '▸' : '▾';
+}
+
 function renderFiches() {
   const q   = document.getElementById('db-search').value.toLowerCase();
   const fst = document.getElementById('db-fst').value;
@@ -3525,6 +3675,9 @@ function renderFiches() {
   const fzone  = document.getElementById('db-fzone')?.value  || '';
   const fecole  = document.getElementById('db-fecole')?.value || '';
   const fmembre = document.getElementById('db-fmembre')?.value || '';
+  const fbaptise = document.getElementById('db-fbaptise')?.value || '';
+  const fsexe    = document.getElementById('db-fsexe')?.value || '';
+  const ffroide  = document.getElementById('db-ffroide')?.checked || false;
   const todayStr = new Date().toISOString().split('T')[0];
   // Exclure fiches supprimées (soft-delete) directement ici
   let list = S.fiches.filter(f => !f.deleted).filter(f => {
@@ -3534,9 +3687,15 @@ function renderFiches() {
     const mzone  = !fzone  || normalizeStr(f.quartier||'') === normalizeStr(fzone);
     const mecole = !fecole || normalizeStr(f.ecole||'') === normalizeStr(fecole);
     const mmembre = !fmembre || f.statutMembre === fmembre;
+    const mbaptise = !fbaptise || (fbaptise === 'oui' ? f.baptise === 'oui' : f.baptise !== 'oui');
+    const msexe = !fsexe || f.sexe === fsexe;
+    const mfroide = !ffroide || (() => {
+      const lastUpdate = f.updatedAt?.toDate ? f.updatedAt.toDate() : (f.createdAt?.toDate ? f.createdAt.toDate() : new Date(f.timestamp||0));
+      return ((new Date() - lastUpdate) / 86400000) > 30 && f.statut !== 'visite';
+    })();
     // Filtre retard
     const mretard = !_filtreRetardActif || (f.nextActionDate && f.nextActionDate < todayStr);
-    return mq && mst && mev && mzone && mecole && mmembre && mretard;
+    return mq && mst && mev && mzone && mecole && mmembre && mbaptise && msexe && mfroide && mretard;
   });
 
   const el = document.getElementById('fiche-list');
@@ -3588,6 +3747,10 @@ function renderFiches() {
       </div>
       <div class="fiche-badges">${sexBadge} ${statusBadge} ${f.baptise==='oui'?'<span class="badge badge-new">💧 Baptisé</span>':''} ${membreBadge}</div>
       ${f.evangelisteNom ? `<div class="fiche-ev">👤 ${f.evangelisteNom}${obsCnt ? ` &nbsp;·&nbsp; 💬 ${obsCnt} obs.` : ''}</div>` : ''}
+      <div style="display:flex;gap:6px;margin-top:8px;" onclick="event.stopPropagation()">
+        <button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity('${f.id}','appel',event)">📞 Appelé</button>
+        <button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity('${f.id}','visite',event)">🚶 Visité</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -5295,8 +5458,11 @@ function renderEvFicheCard(f) {
     + '<input type="hidden" id="af-type-' + f.id + '" value="appel">'
     + '<div class="field"><label>Date <span class="req">*</span></label>'
     + '<input type="date" id="af-date-' + f.id + '" value="' + today + '"></div>'
-    + '<div class="field"><label>Compte-rendu <span class="req">*</span></label>'
-    + '<textarea id="af-note-' + f.id + '" placeholder="R\u00e9sum\u00e9 de l\'\u00e9change, \u00e9tat spirituel\u2026"></textarea></div>'
+    + '<div class="field"><label>Compte-rendu <span style="font-weight:400;text-transform:none;font-size:10px;color:var(--mu);">(optionnel)</span></label>'
+    + '<div style="position:relative;">'
+    + '<textarea id="af-note-' + f.id + '" placeholder="R\u00e9sum\u00e9 de l\'\u00e9change, \u00e9tat spirituel\u2026 (ou dictez avec le micro \ud83c\udfa4)"></textarea>'
+    + '<button type="button" class="btn-mic" id="af-mic-' + f.id + '" onclick="toggleDictee(\'af-note-' + f.id + '\', \'af-mic-' + f.id + '\')" title="Dicter le compte-rendu">\ud83c\udfa4</button>'
+    + '</div></div>'
     + '<div class="field"><label>Dur\u00e9e (min)</label>'
     + '<input type="number" id="af-duree-' + f.id + '" placeholder="ex: 15" min="1" max="300"></div>'
     + '<div id="af-participants-wrap-' + f.id + '" style="display:none;">'
@@ -6529,8 +6695,56 @@ async function marquerRegle(ficheId, btn) {
 }
 
 /* ── SUIVI PAR ÉVANGÉLISTE ───────────────────────────────── */
+/* ── ÉVANGÉLISTES À RELANCER : tri par inactivité, action WhatsApp
+   en 1 clic. Pour de la vraie procrastination, une relance humaine
+   personnelle marche mieux qu'un énième rappel automatique. ── */
+function renderEvangelistesARelancer() {
+  const wrap = document.getElementById('suivi-relance-wrap');
+  const list = document.getElementById('suivi-relance-list');
+  if (!wrap || !list) return;
+
+  const evActifs = (S.evs || []).filter(e => e.actif !== false);
+  const now = new Date();
+
+  const data = evActifs.map(ev => {
+    const acts = (S.activities || []).filter(a => a.evangelisteId === ev.id);
+    const dates = acts.map(a => a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.date || 0)).filter(d => d && !isNaN(d));
+    const derniere = dates.length ? new Date(Math.max(...dates)) : null;
+    const joursSans = derniere ? Math.floor((now - derniere) / 86400000) : null;
+    const nbFiches = getFiches().filter(f => f.evangelisteId === ev.id && !f.deleted).length;
+    return { ev, derniere, joursSans, nbFiches };
+  })
+  // Seulement ceux qui ont des fiches à traiter et un vrai retard (ou jamais rien fait)
+  .filter(d => d.nbFiches > 0 && (d.joursSans === null || d.joursSans >= 7))
+  .sort((a, b) => (b.joursSans ?? 9999) - (a.joursSans ?? 9999));
+
+  if (!data.length) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = 'block';
+
+  list.innerHTML = data.map(d => {
+    const tel = (d.ev.telephone || d.ev.tel || '').replace(/\s/g, '');
+    const label = d.joursSans === null ? "n'a jamais rien enregistré" : `sans activité depuis ${d.joursSans} jour${d.joursSans > 1 ? 's' : ''}`;
+    const msg = encodeURIComponent(`Bonjour ${d.ev.nom}, petit rappel fraternel : pensez à mettre à jour vos ${d.nbFiches} fiche(s) sur l'app de la Commission Témoignage dès que possible. Merci ! 🙏`);
+    const waLink = tel ? `https://wa.me/${tel.replace(/^\+/, '')}?text=${msg}` : null;
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--bo);gap:10px;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:700;font-size:13px;">${_esc(d.ev.nom)}</div>
+          <div style="font-size:11.5px;color:var(--mu);">${label} · ${d.nbFiches} fiche(s) assignée(s)</div>
+        </div>
+        ${waLink
+          ? `<a href="${waLink}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:rgba(37,211,102,0.1);border:1.5px solid rgba(37,211,102,0.35);border-radius:20px;font-size:12px;font-weight:700;color:#128C7E;text-decoration:none;white-space:nowrap;">💬 Relancer</a>`
+          : `<span style="font-size:11px;color:var(--mu);">pas de téléphone</span>`}
+      </div>`;
+  }).join('');
+}
+
 function renderSuivi() {
   renderSuiviRetards();
+  renderEvangelistesARelancer();
   const el = document.getElementById('suivi-ev-blocs');
   if (!el) return;
 
@@ -6585,10 +6799,10 @@ function buildEvBloc(ev, acts, typeIcons, today, canEdit) {
   const perf    = nbTotal > 0 ? Math.round(nbVis / nbTotal * 100) : 0;
   const perfColor = perf >= 70 ? 'var(--ok)' : perf >= 40 ? 'var(--wa)' : 'var(--c3)';
   const perfBar = ev.id !== 'admin' && nbTotal > 0 ? `
-    <div style="padding:8px 16px 10px;border-top:1px solid var(--bo);">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mu);">Performance suivi</span>
-        <span style="font-size:12px;font-weight:800;color:${perfColor};">${perf}% <span style="font-size:10px;font-weight:500;color:var(--mu);">(${nbVis}/${nbTotal} visitée${nbTotal>1?'s':''})</span></span>
+    <div style="padding:10px 16px 12px;border-top:1px solid var(--bo);background:linear-gradient(180deg,transparent,rgba(0,0,0,0.012));">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);">Suivi des fiches</span>
+        <span><span style="font-size:15px;font-weight:800;color:${perfColor};">${perf}%</span> <span style="font-size:10.5px;font-weight:500;color:var(--mu);">(${nbVis}/${nbTotal})</span></span>
       </div>
       <div class="ev-perf-bar"><div class="ev-perf-fill" style="width:${perf}%;background:${perfColor};"></div></div>
     </div>` : '';
@@ -6646,7 +6860,7 @@ async function saveActivity() {
 
   if (!ficheId) return toast('⚠️ Sélectionnez une fiche');
   if (!date)    return toast('⚠️ La date est requise');
-  if (!note)    return toast('⚠️ Ajoutez un compte-rendu');
+  const noteFinale = note || { appel: 'Appel effectué', visite: 'Visite effectuée', message: 'Message envoyé' }[type] || 'Contact effectué';
 
   const fiche = S.fiches.find(f => f.id === ficheId);
   const typeIcons = {appel:'📞',visite:'🚶',message:'💬'};
@@ -6657,7 +6871,7 @@ async function saveActivity() {
       ficheNom:       `${fiche?.nom||''} ${fiche?.prenom||''}`.trim(),
       type, date,
       duree:          duree ? parseInt(duree) : null,
-      note,
+      note:           noteFinale,
       nextAction:     next || null,
       nextActionDate: nextDate || null,
       parId:          S.evId || 'admin',
@@ -6701,7 +6915,9 @@ async function saveEvActivity(ficheId) {
   const nextDate= document.getElementById(`af-next-date-${ficheId}`)?.value;
 
   if (!date) return toast('⚠️ La date est requise');
-  if (!note) return toast('⚠️ Ajoutez un compte-rendu');
+  // Compte-rendu optionnel : un texte par défaut est utilisé si rien n'est saisi,
+  // pour ne pas bloquer l'enregistrement (mieux vaut une trace minimale que rien).
+  const noteFinale = note || { appel: 'Appel effectué', visite: 'Visite effectuée', message: 'Message envoyé' }[type] || 'Contact effectué';
 
   // Récupérer les co-participants si c'est une visite
   const equipe = type === 'visite'
@@ -6723,7 +6939,7 @@ async function saveEvActivity(ficheId) {
       ficheNom:       `${fiche?.nom||''} ${fiche?.prenom||''}`.trim(),
       type, date,
       duree:          duree ? parseInt(duree) : null,
-      note,
+      note:           noteFinale,
       equipe:         equipe.length ? equipe : null,
       autresPresents: autresPresents,
       nextAction:     next || null,
@@ -10151,15 +10367,20 @@ function renderAnlEvangelistes() {
     });
   }
 
-  // Liste détail
+  // Liste détail par évangéliste — ordre alphabétique, sans classement
+  // ni hiérarchie : chacun sert selon ce qu'il peut, pas de compétition.
   const detailList = document.getElementById('anl-ev-detail-list');
   if (detailList && evActifs.length) {
-    detailList.innerHTML = evActifs.map(e => {
+    const donnees = evActifs.map(e => {
       const ef = fiches.filter(f=>f.evangelisteId===e.id).length;
       const eVis = fiches.filter(f=>f.evangelisteId===e.id&&f.statut==='visite').length;
       const ea = acts.filter(a=>a.evangelisteId===e.id||a.parId===e.id).length;
       const eRet = fiches.filter(f=>f.evangelisteId===e.id&&f.nextActionDate&&f.nextActionDate<now.toISOString().split('T')[0]).length;
-      const taux = ef>0 ? Math.round(eVis/ef*100) : 0;
+      return { e, ef, eVis, ea, eRet };
+    }).sort((a, b) => a.e.nom.localeCompare(b.e.nom));
+
+    detailList.innerHTML = donnees.map(d => {
+      const { e, ef, eVis, ea, eRet } = d;
       const initiales = (e.nom||'?').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
       return `
         <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--bo);border-radius:12px;margin-bottom:8px;">
