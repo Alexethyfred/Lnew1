@@ -1671,6 +1671,9 @@ body .animate, body .spinner, body [class*="anim"] {
       <button type="button" onclick="toggleFiltresAvances()" id="btn-filtres-avances" style="background:none;border:none;color:var(--c1);font-size:12.5px;font-weight:700;padding:6px 2px;cursor:pointer;display:flex;align-items:center;gap:5px;">
         <span id="filtres-avances-arrow">▸</span> Filtres avancés
       </button>
+      <button type="button" onclick="toggleModeSelection()" id="btn-mode-selection" style="background:none;border:none;color:var(--c1);font-size:12.5px;font-weight:700;padding:6px 2px 6px 14px;cursor:pointer;">
+        ☑️ Message groupé WhatsApp
+      </button>
       <div id="filtres-avances-panel" style="display:none;background:var(--surface);border:1.5px solid var(--bo);border-radius:12px;padding:12px 14px;margin-bottom:12px;">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
           <select id="db-fbaptise" onchange="renderFiches()">
@@ -1691,6 +1694,51 @@ body .animate, body .spinner, body [class*="anim"] {
 
       <div class="fiche-list" id="fiche-list">
         <div class="empty-state"><div class="ico">⏳</div><p>Chargement en cours…</p></div>
+      </div>
+    </div>
+
+    <!-- BARRE FLOTTANTE SÉLECTION MULTIPLE -->
+    <div id="selection-bar" style="display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:200;background:var(--c1);color:#fff;border-radius:40px;padding:10px 10px 10px 20px;box-shadow:0 8px 30px rgba(0,0,0,0.25);display:flex;align-items:center;gap:12px;max-width:92vw;">
+      <span id="selection-count" style="font-size:13px;font-weight:700;white-space:nowrap;">0 sélectionnée(s)</span>
+      <button class="btn" style="background:#fff;color:var(--c1);border-radius:30px;padding:8px 16px;font-size:13px;font-weight:700;white-space:nowrap;" onclick="ouvrirMessageGroupe()">💬 Écrire le message</button>
+      <button class="btn-icon" style="color:#fff;font-size:18px;" onclick="toggleModeSelection()" title="Annuler">✕</button>
+    </div>
+
+    <!-- MODAL MESSAGE GROUPÉ WHATSAPP -->
+    <div class="modal-overlay" id="modal-msg-groupe" style="display:none;">
+      <div class="modal" style="max-width:520px;">
+        <div class="modal-head">
+          <div class="modal-title">💬 Message groupé WhatsApp</div>
+          <button class="modal-close" onclick="fermerMessageGroupe()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div id="msg-groupe-etape-redaction">
+            <div style="font-size:12.5px;color:var(--mu);margin-bottom:10px;">Écrivez le message une seule fois. Utilisez <code>{prenom}</code> pour qu'il soit personnalisé automatiquement pour chaque contact.</div>
+            <div style="position:relative;">
+              <textarea id="msg-groupe-texte" rows="6" placeholder="Bonjour {prenom}, ..." style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 40px 9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:vertical;width:100%;color:var(--tx);"></textarea>
+              <button type="button" class="btn-mic" id="msg-groupe-mic" onclick="toggleDictee('msg-groupe-texte','msg-groupe-mic')" title="Dicter le message">🎤</button>
+            </div>
+            <button class="btn btn-primary btn-full" style="margin-top:14px;" onclick="demarrerEnvoiGroupe()">▶️ Démarrer l'envoi (<span id="msg-groupe-nb-select">0</span> contact(s))</button>
+          </div>
+          <div id="msg-groupe-etape-envoi" style="display:none;">
+            <div style="text-align:center;margin-bottom:14px;">
+              <div style="font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Contact <span id="msg-groupe-position"></span></div>
+              <div id="msg-groupe-nom-contact" style="font-size:19px;font-weight:800;margin-top:4px;"></div>
+            </div>
+            <div style="background:var(--bg2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--tx);white-space:pre-wrap;margin-bottom:16px;max-height:150px;overflow-y:auto;" id="msg-groupe-apercu"></div>
+            <a id="msg-groupe-lien-wa" href="#" target="_blank" rel="noopener" class="btn btn-primary btn-full" style="margin-bottom:10px;display:block;text-align:center;text-decoration:none;">💬 Ouvrir WhatsApp pour envoyer</a>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-outline" style="flex:1;" onclick="passerContactGroupe()">Passer (sans envoyer)</button>
+              <button class="btn btn-primary" style="flex:1;" onclick="confirmerEnvoiGroupe()">✅ Envoyé, suivant</button>
+            </div>
+          </div>
+          <div id="msg-groupe-etape-fin" style="display:none;text-align:center;padding:20px 0;">
+            <div style="font-size:40px;margin-bottom:10px;">✅</div>
+            <div style="font-size:15px;font-weight:700;">Terminé !</div>
+            <div style="font-size:13px;color:var(--mu);margin-top:6px;" id="msg-groupe-recap"></div>
+            <button class="btn btn-primary" style="margin-top:16px;" onclick="fermerMessageGroupe()">Fermer</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -3658,6 +3706,138 @@ async function quickLogActivity(ficheId, type, event) {
   }
 }
 
+/* ════════════════════════════════════════════════════════════
+   MESSAGE GROUPÉ WHATSAPP
+   WhatsApp n'autorise pas l'envoi automatique groupé (limite de
+   la plateforme, pas de contournement gratuit possible) — ce que
+   ça fait : rédiger le message UNE SEULE FOIS, puis ouvrir WhatsApp
+   pré-rempli pour chaque contact sélectionné, l'un après l'autre.
+   Le clic "Envoyer" dans WhatsApp reste manuel, mais plus besoin
+   de retaper le message à chaque fois.
+════════════════════════════════════════════════════════════ */
+let _selectionModeActif = false;
+let _fichesSelectionnees = new Set();
+let _envoiGroupeQueue = [];
+let _envoiGroupeIndex = 0;
+let _envoiGroupeTexte = '';
+let _envoiGroupeEnvoyes = 0;
+
+function toggleModeSelection() {
+  _selectionModeActif = !_selectionModeActif;
+  if (!_selectionModeActif) _fichesSelectionnees.clear();
+  const btn = document.getElementById('btn-mode-selection');
+  if (btn) btn.textContent = _selectionModeActif ? '✕ Annuler la sélection' : '☑️ Message groupé WhatsApp';
+  renderFiches();
+  majBarreSelection();
+}
+
+function toggleSelectionFiche(ficheId, event) {
+  if (event) event.stopPropagation();
+  if (_fichesSelectionnees.has(ficheId)) _fichesSelectionnees.delete(ficheId);
+  else _fichesSelectionnees.add(ficheId);
+  renderFiches();
+  majBarreSelection();
+}
+
+function majBarreSelection() {
+  const bar = document.getElementById('selection-bar');
+  const count = document.getElementById('selection-count');
+  if (!bar || !count) return;
+  const n = _fichesSelectionnees.size;
+  bar.style.display = (_selectionModeActif && n > 0) ? 'flex' : 'none';
+  count.textContent = `${n} sélectionnée${n > 1 ? 's' : ''}`;
+}
+
+function ouvrirMessageGroupe() {
+  const modal = document.getElementById('modal-msg-groupe');
+  if (!modal) return;
+  document.getElementById('msg-groupe-etape-redaction').style.display = 'block';
+  document.getElementById('msg-groupe-etape-envoi').style.display = 'none';
+  document.getElementById('msg-groupe-etape-fin').style.display = 'none';
+  document.getElementById('msg-groupe-texte').value = '';
+  document.getElementById('msg-groupe-nb-select').textContent = _fichesSelectionnees.size;
+  modal.style.display = 'flex';
+}
+
+function fermerMessageGroupe() {
+  const modal = document.getElementById('modal-msg-groupe');
+  if (modal) modal.style.display = 'none';
+}
+
+function demarrerEnvoiGroupe() {
+  const texte = document.getElementById('msg-groupe-texte')?.value.trim();
+  if (!texte) { toast('⚠️ Écrivez un message'); return; }
+  _envoiGroupeTexte = texte;
+  _envoiGroupeQueue = getFiches().filter(f => _fichesSelectionnees.has(f.id) && (f.telephone || '').trim());
+  _envoiGroupeIndex = 0;
+  _envoiGroupeEnvoyes = 0;
+
+  const sansTel = _fichesSelectionnees.size - _envoiGroupeQueue.length;
+  if (sansTel > 0) toast(`⚠️ ${sansTel} fiche(s) ignorée(s) — pas de téléphone renseigné`);
+
+  if (!_envoiGroupeQueue.length) { toast('❌ Aucun contact avec téléphone dans la sélection'); return; }
+
+  document.getElementById('msg-groupe-etape-redaction').style.display = 'none';
+  document.getElementById('msg-groupe-etape-envoi').style.display = 'block';
+  afficherContactGroupeCourant();
+}
+
+function afficherContactGroupeCourant() {
+  const f = _envoiGroupeQueue[_envoiGroupeIndex];
+  const total = _envoiGroupeQueue.length;
+  const texte = _envoiGroupeTexte.replace(/\{prenom\}/gi, f.prenom || f.nom || '');
+  const telRaw  = (f.telephone || '').trim();
+  const telIntl = telRaw.startsWith('+') ? telRaw : (telRaw ? '+212' + telRaw.replace(/^0/, '') : '');
+  const telFinal = telIntl.replace(/^\+/, '');
+
+  document.getElementById('msg-groupe-position').textContent = `${_envoiGroupeIndex + 1} / ${total}`;
+  document.getElementById('msg-groupe-nom-contact').textContent = `${f.nom || ''} ${f.prenom || ''}`;
+  document.getElementById('msg-groupe-apercu').textContent = texte;
+  document.getElementById('msg-groupe-lien-wa').href = `https://wa.me/${telFinal}?text=${encodeURIComponent(texte)}`;
+}
+
+async function confirmerEnvoiGroupe() {
+  const f = _envoiGroupeQueue[_envoiGroupeIndex];
+  // Trace l'activité "message" pour garder le suivi à jour sans effort
+  try {
+    await window._saveActivity({
+      ficheId: f.id,
+      ficheNom: `${f.nom || ''} ${f.prenom || ''}`.trim(),
+      type: 'message',
+      date: new Date().toISOString().split('T')[0],
+      duree: null,
+      note: 'Message WhatsApp groupé envoyé',
+      nextAction: null, nextActionDate: null,
+      parId: S.evId || 'admin',
+      parNom: S.evNom || 'Responsable',
+      evangelisteId: f.evangelisteId || S.evId || null,
+    });
+  } catch (e) { console.error(e); }
+  _envoiGroupeEnvoyes++;
+  passerAuSuivantGroupe();
+}
+
+function passerContactGroupe() {
+  passerAuSuivantGroupe();
+}
+
+function passerAuSuivantGroupe() {
+  _envoiGroupeIndex++;
+  if (_envoiGroupeIndex >= _envoiGroupeQueue.length) {
+    terminerEnvoiGroupe();
+    return;
+  }
+  afficherContactGroupeCourant();
+}
+
+function terminerEnvoiGroupe() {
+  document.getElementById('msg-groupe-etape-envoi').style.display = 'none';
+  document.getElementById('msg-groupe-etape-fin').style.display = 'block';
+  document.getElementById('msg-groupe-recap').textContent =
+    `${_envoiGroupeEnvoyes} message(s) envoyé(s) sur ${_envoiGroupeQueue.length}.`;
+  toggleModeSelection(); // sort du mode sélection proprement
+}
+
 function toggleFiltresAvances() {
   const panel = document.getElementById('filtres-avances-panel');
   const arrow = document.getElementById('filtres-avances-arrow');
@@ -3737,7 +3917,8 @@ function renderFiches() {
 
     })();
     return `
-    <div class="fiche-item" onclick="openFicheModal('${f.id}')">
+    <div class="fiche-item" onclick="${_selectionModeActif ? `toggleSelectionFiche('${f.id}', event)` : `openFicheModal('${f.id}')`}" style="position:relative;${_selectionModeActif && _fichesSelectionnees.has(f.id) ? 'outline:2px solid var(--c1);outline-offset:-2px;' : ''}">
+      ${_selectionModeActif ? `<div style="position:absolute;top:12px;right:12px;width:22px;height:22px;border-radius:6px;border:2px solid var(--c1);background:${_fichesSelectionnees.has(f.id) ? 'var(--c1)' : 'var(--surface)'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;">${_fichesSelectionnees.has(f.id) ? '✓' : ''}</div>` : ''}
       <div class="fiche-item-top">
         <div>
           <div class="fiche-nom">${f.nom||''} ${f.prenom||''} ${coldBadge}</div>
@@ -3747,10 +3928,11 @@ function renderFiches() {
       </div>
       <div class="fiche-badges">${sexBadge} ${statusBadge} ${f.baptise==='oui'?'<span class="badge badge-new">💧 Baptisé</span>':''} ${membreBadge}</div>
       ${f.evangelisteNom ? `<div class="fiche-ev">👤 ${f.evangelisteNom}${obsCnt ? ` &nbsp;·&nbsp; 💬 ${obsCnt} obs.` : ''}</div>` : ''}
+      ${!_selectionModeActif ? `
       <div style="display:flex;gap:6px;margin-top:8px;" onclick="event.stopPropagation()">
         <button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity('${f.id}','appel',event)">📞 Appelé</button>
         <button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity('${f.id}','visite',event)">🚶 Visité</button>
-      </div>
+      </div>` : ''}
     </div>`;
   }).join('');
 }
@@ -4957,7 +5139,8 @@ async function saveObs(ficheId) {
 
   try {
     await window._addObs(ficheId, obs, pv || null);
-    if (pv) scheduleWhatsAppReminder(ficheId, pv);
+    // Le rappel 48h avant la prochaine visite (pv) est géré côté serveur,
+    // à partir du champ prochaineVisite déjà stocké sur la fiche via _addObs.
     toast('✅ Observation enregistrée !');
   } catch (err) {
     console.error(err);
@@ -5769,16 +5952,18 @@ function initCommunications() {
 }
 
 const _COMM_TYPE_LABELS = {
-  hebdo:       '📅 Rappel hebdomadaire',
-  visite_mois: '🚶 Rappel visite mensuelle',
-  sortie:      '🚌 Invitation sortie collective',
-  manuel:      '✍️ Message de la responsable',
+  hebdo:         '📅 Rappel hebdomadaire',
+  visite_mois:   '🚶 Rappel visite mensuelle',
+  sortie:        '🚌 Invitation sortie collective',
+  manuel:        '✍️ Message de la responsable',
+  action_prevue: '⏰ Action/visite prévue (48h)',
 };
 const _COMM_BADGES = {
-  hebdo:       '📅 Rappel hebdomadaire',
-  visite_mois: '🚶 Rappel visite mensuelle',
-  sortie:      '🚌 Invitation — Sortie collective',
-  manuel:      '✍️ Message de la Commission',
+  hebdo:         '📅 Rappel hebdomadaire',
+  visite_mois:   '🚶 Rappel visite mensuelle',
+  sortie:        '🚌 Invitation — Sortie collective',
+  manuel:        '✍️ Message de la Commission',
+  action_prevue: '⏰ Rappel — Action prévue bientôt',
 };
 
 function renderCommQueue() {
@@ -6879,15 +7064,8 @@ async function saveActivity() {
       evangelisteId:  S.evId || null,
     });
     if (next && ficheId) await window._setNextAction(ficheId, next, nextDate, whoAmI());
-    if (nextDate) {
-      // Trouver l'évangéliste assigné à la fiche pour lui envoyer le rappel
-      const ficheObj = S.fiches.find(f => f.id === ficheId);
-      const evAssigne = ficheObj?.evangelisteId ? S.evs.find(e => e.id === ficheObj.evangelisteId) : null;
-      if (evAssigne?.email) {
-        scheduleEmailReminder(evAssigne.email, evAssigne.nom,
-          `${fiche?.nom} ${fiche?.prenom}`, next||'Action prévue', nextDate);
-      }
-    }
+    // Le rappel 48h avant est désormais généré côté serveur (fiable, cron),
+    // à partir de nextActionDate stocké sur la fiche — voir send-reminders.js.
     ['act-note','act-next','act-duree'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     ['act-next-date'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById('act-fiche').value = '';
@@ -6972,15 +7150,8 @@ async function saveEvActivity(ficheId) {
     await window._pushNotif('admin',
       `${typeIcons[type]} ${S.evNom} — ${fiche?.nom} ${fiche?.prenom} : "${note.substring(0,60)}${note.length>60?'…':''}"`,
       'activity');
-    // Rappel email si prochaine action planifiée
-    if (nextDate) {
-      const ev = S.evs.find(e => e.id === S.evId);
-      if (ev?.email) {
-        scheduleEmailReminder(ev.email, ev.nom,
-          `${fiche?.nom||''} ${fiche?.prenom||''}`.trim(),
-          next||'Action prévue', nextDate);
-      }
-    }
+    // Le rappel 48h avant (si prochaine action planifiée) est géré côté
+    // serveur (fiable, cron) à partir de nextActionDate sur la fiche.
     // Reset form
     [`af-note-${ficheId}`,`af-next-${ficheId}`,`af-duree-${ficheId}`,`af-autres-${ficheId}`].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById(`af-next-date-${ficheId}`)?.value && (document.getElementById(`af-next-date-${ficheId}`).value='');
@@ -7238,101 +7409,11 @@ const _EJS = {
   templateRapport: 'template_1fvclpq'    // Rapports hebdo / mensuel / annuel
 };
 
-/**
- * Planifie un rappel email via EmailJS.
- * — Vérifie d'abord s'il existe déjà un rappel identique (email + fiche + date) pour éviter les doublons.
- * — Envoie immédiatement si la date de rappel (48h avant) est déjà passée.
- * — Sinon, stocke dans Firebase avec sent:false et envoie via setTimeout si la page reste ouverte.
- */
-async function scheduleEmailReminder(evEmail, evNom, ficheNom, action, targetDate) {
-  if (!evEmail || !targetDate) return;
-
-  // Dédoublonnage : vérifier si un rappel identique existe déjà
-  try {
-    const existing = await db.collection('rappels')
-      .where('email', '==', evEmail)
-      .where('ficheNom', '==', ficheNom || '')
-      .where('prochaineAction', '==', targetDate)
-      .limit(1)
-      .get();
-    if (!existing.empty) {
-      console.log('Rappel déjà existant — ignoré');
-      return;
-    }
-  } catch(e) { /* si index manquant, on continue quand même */ }
-
-  const visitDate    = new Date(targetDate + 'T12:00:00');
-  const reminderDate = new Date(visitDate.getTime() - 48 * 3600 * 1000);
-  const delayMs      = reminderDate - Date.now();
-
-  const sendEmail = async (docId) => {
-    const v = versets[Math.floor(Math.random() * versets.length)];
-    try {
-      await _ejsSend(_EJS.service, _EJS.template, {
-        to_email:    evEmail,
-        ev_nom:      evNom || 'Évangéliste',
-        fiche_nom:   ficheNom || '—',
-        action:      action || 'Action planifiée',
-        action_date: targetDate,
-        verset:      v.txt,
-        verset_ref:  v.ref,
-      }, 'rappel-agenda');
-      // Marquer comme envoyé dans Firebase
-      if (docId) {
-        db.collection('rappels').doc(docId).update({ sent: true }).catch(() => {});
-      } else {
-        db.collection('rappels').add({
-          email: evEmail, evNom, ficheNom, action,
-          prochaineAction: targetDate, sent: true,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).catch(() => {});
-      }
-    } catch(err) {
-      // _ejsSend a déjà affiché le toast approprié
-    }
-  };
-
-  if (delayMs <= 0) {
-    // Date passée ou dans moins de 48h — envoyer immédiatement
-    sendEmail(null);
-  } else {
-    // Enregistrer dans Firebase (sent:false) et programmer l'envoi
-    let docId = null;
-    try {
-      const ref = await db.collection('rappels').add({
-        email: evEmail, evNom, ficheNom, action,
-        prochaineAction: targetDate, sent: false,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      docId = ref.id;
-    } catch(e) {}
-    // setTimeout limité à ~24 jours (limite JS); le serveur Firebase enverra si la page est rechargée
-    setTimeout(() => sendEmail(docId), Math.min(delayMs, 2147483647));
-  }
-}
-
-// Wrapper pour compatibilité avec l'ancien code
-function scheduleWAReminder(telephone, apikey, message, targetDate) {
-  // Ancienne fonction CallMeBot — désactivée, remplacée par email
-  // On stocke quand même dans Firebase pour traçabilité
-  db.collection('rappels').add({
-    telephone, prochaineAction: targetDate, message,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(() => {});
-}
-
-function scheduleWhatsAppReminder(ficheId, prochaineVisite) {
-  const fiche = S.myFiches.find(f => f.id === ficheId);
-  const ev    = S.evs.find(e => e.id === S.evId);
-  if (!fiche || !ev) return;
-  scheduleEmailReminder(
-    ev.email,
-    ev.nom,
-    `${fiche.nom} ${fiche.prenom}`,
-    'Visite prévue',
-    prochaineVisite
-  );
-}
+// Ancien mécanisme de rappel email peu fiable (dépendait du navigateur resté
+// ouvert via setTimeout) — retiré. Le rappel 48h avant une action ou une
+// visite prévue est désormais généré côté serveur (fiable, cron), à partir
+// des champs nextActionDate / prochaineVisite déjà stockés sur la fiche
+// (voir runRappelActionPrevue dans send-reminders.js).
 
 /* ════════════════════════════════════════════════════════════
    RAPPELS AUTOMATIQUES — CADENCE OFFICIELLE
@@ -10477,13 +10558,8 @@ async function saveEvQuickActivity() {
     });
     if (next && nextDate) {
       await window._setNextAction(ficheId, next, nextDate, S.evNom);
-      // Planifier un rappel email 48h avant si email disponible
-      const evProfile = S.evs && S.evs.find(e => e.id === S.evId);
-      if (evProfile?.email) {
-        scheduleEmailReminder(evProfile.email, S.evNom,
-          fiche ? fiche.nom + ' ' + fiche.prenom : '—',
-          next, nextDate);
-      }
+      // Le rappel 48h avant est géré côté serveur (fiable, cron), à partir
+      // de nextActionDate déjà stocké sur la fiche ci-dessus.
     }
     await window._updateEvActivity(S.evId);
     // Mettre à jour le statut de la fiche en "visite" si ce n'est pas déjà le cas
