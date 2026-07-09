@@ -246,6 +246,52 @@ async function runSortiesCollectives() {
   }
 }
 
+/* ── 6bis. Rappel 48h avant une action ou visite prévue ─────
+   Remplace l'ancien mécanisme client peu fiable (setTimeout qui ne
+   fonctionnait que si le navigateur restait ouvert). Ici, détection
+   fiable chaque jour via le cron : toute fiche dont la prochaine
+   action (nextActionDate) ou la prochaine visite (prochaineVisite)
+   tombe dans 2 jours reçoit un rappel nominatif, chaleureux, avec
+   un encouragement et une bénédiction. ── */
+async function runRappelActionPrevue(now) {
+  const dans2jours = new Date(now.getTime() + 2 * 86400000).toISOString().split('T')[0];
+
+  const fichesSnap = await db.collection('fiches').get();
+  const fiches = fichesSnap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(f => !f.deleted && (f.nextActionDate === dans2jours || f.prochaineVisite === dans2jours));
+  if (!fiches.length) return;
+
+  const evsSnap = await db.collection('evangelistes').get();
+  const evs = evsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  for (const f of fiches) {
+    if (!f.evangelisteId) continue;
+    const ev = evs.find(e => e.id === f.evangelisteId);
+    if (!ev) continue;
+
+    const dateCible = f.nextActionDate === dans2jours ? f.nextActionDate : f.prochaineVisite;
+    const docId = `${f.id}_${dateCible}_action`;
+    const ref = db.collection('rappels_action_prevue').doc(docId);
+    const snap2 = await ref.get();
+    if (snap2.exists) continue;
+    await ref.set({ ficheId: f.id, dateCible, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+
+    const nomFiche = `${f.nom || ''} ${f.prenom || ''}`.trim();
+    const actionTexte = f.nextActionDate === dans2jours && f.nextAction ? f.nextAction : 'Visite prévue';
+    const dateLabel = new Date(dateCible).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const v = versets[Math.floor(Math.random() * versets.length)];
+
+    const contenu = `Bonjour ${ev.nom},\n\nUn temps précieux approche : vous avez prévu "${actionTexte}" avec ${nomFiche} ${dateLabel} (dans 2 jours).\n\nPrenez un moment pour prier pour cette rencontre et pour ${nomFiche}. Que le Seigneur prépare les coeurs et vous donne les mots justes !\n\n"${v.txt}" — ${v.ref}\n\nQue Dieu vous bénisse et vous accompagne.\n\nFraternellement,\nCommission Témoignage — EEAM Fès`;
+
+    await queueCommunication(`${f.id}_${dateCible}_action_comm`, {
+      type: 'action_prevue', evId: ev.id, evNom: ev.nom, evEmail: ev.email || null,
+      cle: dateCible, contenu, ficheNom: nomFiche,
+    });
+    console.log(`✔ Rappel action prévue déposé pour ${ev.nom} — ${nomFiche} (${dateLabel})`);
+  }
+}
+
 /* ── 7. Livraison effective des notifications "device" demandées ──
    Quand le/la responsable clique "Envoyer la notification" dans
    l'app, ça pose pushDemande:true. Ce script livre la vraie bannière
@@ -284,6 +330,7 @@ async function runPushDemandes() {
   console.log('▶ Vérification des rappels —', now.toISOString());
   await runRappelHebdo(now);
   await runRappelVisiteMensuelle(now);
+  await runRappelActionPrevue(now);
   await runSortiesCollectives();
   await runPushDemandes();
   console.log('✔ Terminé.');
