@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#7B1111">
-<title>Commission Témoignage — Paroisse de Fès </title>
+<title>Commission Témoignage — Paroisse de Fès v9</title>
 
 <!-- ── PWA : installable sur PC, Android, iOS ─────────────── -->
 <link rel="manifest" href="manifest.json">
@@ -1674,8 +1674,7 @@ body .animate, body .spinner, body [class*="anim"] {
       <button type="button" onclick="toggleModeSelection()" id="btn-mode-selection" style="background:none;border:none;color:var(--c1);font-size:12.5px;font-weight:700;padding:6px 2px 6px 14px;cursor:pointer;">
         ☑️ Message groupé WhatsApp
       </button>
-      <div id="filtres-avances-panel" style="display:none;background:var(--surface);border:1.5px solid var(--bo);border-radius:12px;padding:12px 14px;margin-bottom:12px;">
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
+      <div id="filtres-avances-panel" class="toolbar" style="display:none;background:var(--surface);border:1.5px solid var(--bo);border-radius:12px;padding:14px 16px;margin-bottom:12px;">
           <select id="db-fbaptise" onchange="renderFiches()">
             <option value="">Baptisé — tous</option>
             <option value="oui">💧 Baptisé</option>
@@ -1686,10 +1685,9 @@ body .animate, body .spinner, body [class*="anim"] {
             <option value="M">♂ Homme</option>
             <option value="F">♀ Femme</option>
           </select>
-          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--tx);cursor:pointer;">
-            <input type="checkbox" id="db-ffroide" onchange="renderFiches()"> 🧊 Fiches froides uniquement
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx);cursor:pointer;background:var(--bg2);border:1.5px solid var(--bo);border-radius:var(--r-sm);padding:9px 14px;">
+            <input type="checkbox" id="db-ffroide" onchange="renderFiches()" style="accent-color:var(--c1);width:15px;height:15px;cursor:pointer;"> 🧊 Fiches froides uniquement
           </label>
-        </div>
       </div>
 
       <div class="fiche-list" id="fiche-list">
@@ -1943,14 +1941,6 @@ body .animate, body .spinner, body [class*="anim"] {
           <span class="retards-toggle open">▶</span>
         </div>
         <div class="retards-body" id="suivi-retards-list"></div>
-      </div>
-
-      <!-- BLOC ÉVANGÉLISTES À RELANCER (inactivité) -->
-      <div id="suivi-relance-wrap" style="display:none;margin-bottom:16px;">
-        <div class="card" style="padding:16px;border:1.5px solid rgba(184,106,0,0.35);">
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--wa);margin-bottom:10px;">🔔 À relancer personnellement</div>
-          <div id="suivi-relance-list"></div>
-        </div>
       </div>
 
       <!-- FORMULAIRE RAPIDE RESPONSABLE -->
@@ -2226,6 +2216,15 @@ body .animate, body .spinner, body [class*="anim"] {
 
     <!-- TAB CONTACTS -->
     <div class="tabcontent" id="tab-contacts">
+
+      <!-- À relancer personnellement (inactivité) -->
+      <div id="relance-wrap" style="display:none;margin-bottom:18px;">
+        <div class="card" style="padding:18px;">
+          <div class="chart-title" style="margin-bottom:4px;">🔔 À relancer personnellement</div>
+          <p style="font-size:12px;color:var(--mu);margin-bottom:14px;line-height:1.5;">Évangélistes sans activité enregistrée depuis un moment — un mot de votre part fait souvent plus qu'un rappel automatique.</p>
+          <div id="relance-list"></div>
+        </div>
+      </div>
 
       <!-- Liste unifiée équipe -->
       <div class="card" style="padding:18px;">
@@ -3843,7 +3842,7 @@ function toggleFiltresAvances() {
   const arrow = document.getElementById('filtres-avances-arrow');
   if (!panel) return;
   const isOpen = panel.style.display !== 'none';
-  panel.style.display = isOpen ? 'none' : 'block';
+  panel.style.display = isOpen ? 'none' : 'flex';
   if (arrow) arrow.textContent = isOpen ? '▸' : '▾';
 }
 
@@ -6884,8 +6883,8 @@ async function marquerRegle(ficheId, btn) {
    en 1 clic. Pour de la vraie procrastination, une relance humaine
    personnelle marche mieux qu'un énième rappel automatique. ── */
 function renderEvangelistesARelancer() {
-  const wrap = document.getElementById('suivi-relance-wrap');
-  const list = document.getElementById('suivi-relance-list');
+  const wrap = document.getElementById('relance-wrap');
+  const list = document.getElementById('relance-list');
   if (!wrap || !list) return;
 
   const evActifs = (S.evs || []).filter(e => e.actif !== false);
@@ -6899,7 +6898,6 @@ function renderEvangelistesARelancer() {
     const nbFiches = getFiches().filter(f => f.evangelisteId === ev.id && !f.deleted).length;
     return { ev, derniere, joursSans, nbFiches };
   })
-  // Seulement ceux qui ont des fiches à traiter et un vrai retard (ou jamais rien fait)
   .filter(d => d.nbFiches > 0 && (d.joursSans === null || d.joursSans >= 7))
   .sort((a, b) => (b.joursSans ?? 9999) - (a.joursSans ?? 9999));
 
@@ -6910,26 +6908,42 @@ function renderEvangelistesARelancer() {
   wrap.style.display = 'block';
 
   list.innerHTML = data.map(d => {
-    const tel = (d.ev.telephone || d.ev.tel || '').replace(/\s/g, '');
-    const label = d.joursSans === null ? "n'a jamais rien enregistré" : `sans activité depuis ${d.joursSans} jour${d.joursSans > 1 ? 's' : ''}`;
-    const msg = encodeURIComponent(`Bonjour ${d.ev.nom}, petit rappel fraternel : pensez à mettre à jour vos ${d.nbFiches} fiche(s) sur l'app de la Commission Témoignage dès que possible. Merci ! 🙏`);
-    const waLink = tel ? `https://wa.me/${tel.replace(/^\+/, '')}?text=${msg}` : null;
+    const { ev, joursSans, nbFiches } = d;
+    const initiales = (ev.nom || '?').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+    const tel = (ev.telephone || ev.tel || '').replace(/\s/g, '');
+    const telNet = tel.startsWith('+') ? tel : (tel ? '+212' + tel.replace(/^0/, '') : '');
+    const label = joursSans === null ? "n'a jamais rien enregistré" : `sans activité depuis ${joursSans} jour${joursSans > 1 ? 's' : ''}`;
+    const msg = encodeURIComponent(`Bonjour ${ev.nom}, petit rappel fraternel : pensez à mettre à jour vos ${nbFiches} fiche(s) sur l'app de la Commission Témoignage dès que possible. Merci ! 🙏`);
+    const waLink = telNet ? `https://wa.me/${telNet.replace(/^\+/, '')}?text=${msg}` : '#';
+    const callLink = telNet ? `tel:${telNet}` : '#';
+
     return `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--bo);gap:10px;flex-wrap:wrap;">
-        <div>
-          <div style="font-weight:700;font-size:13px;">${_esc(d.ev.nom)}</div>
-          <div style="font-size:11.5px;color:var(--mu);">${label} · ${d.nbFiches} fiche(s) assignée(s)</div>
+      <div style="background:var(--surface);border:1px solid var(--bo);border-radius:14px;margin-bottom:10px;overflow:hidden;box-shadow:var(--sh);">
+        <div style="display:flex;align-items:center;gap:12px;padding:13px 15px;">
+          <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--wa),#D9900A);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:700;flex-shrink:0;">${initiales}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:700;color:var(--tx);">${_esc(ev.nom)}</div>
+            <div style="font-size:11px;color:var(--wa);margin-top:2px;font-weight:600;">⏳ ${label}</div>
+            <div style="font-size:11px;color:var(--mu);margin-top:1px;">${nbFiches} fiche(s) assignée(s)</div>
+          </div>
         </div>
-        ${waLink
-          ? `<a href="${waLink}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:rgba(37,211,102,0.1);border:1.5px solid rgba(37,211,102,0.35);border-radius:20px;font-size:12px;font-weight:700;color:#128C7E;text-decoration:none;white-space:nowrap;">💬 Relancer</a>`
-          : `<span style="font-size:11px;color:var(--mu);">pas de téléphone</span>`}
+        <div style="display:flex;border-top:1px solid var(--bo);">
+          ${tel ? `
+          <a href="${callLink}" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:11px;background:rgba(26,107,51,0.04);font-size:12px;font-weight:700;color:var(--ok);text-decoration:none;border-right:1px solid var(--bo);">📞 Appel</a>
+          <a href="${waLink}" target="_blank" rel="noopener" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:11px;background:rgba(37,211,102,0.04);font-size:12px;font-weight:700;color:#128C7E;text-decoration:none;">💬 Relancer</a>
+          ` : `<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:11px;font-size:12px;color:var(--mu);font-style:italic;">Pas de numéro enregistré</div>`}
+        </div>
       </div>`;
   }).join('');
 }
 
+function renderContactsTab() {
+  renderUnifiedContactsList();
+  renderEvangelistesARelancer();
+}
+
 function renderSuivi() {
   renderSuiviRetards();
-  renderEvangelistesARelancer();
   const el = document.getElementById('suivi-ev-blocs');
   if (!el) return;
 
@@ -11030,10 +11044,6 @@ function _buildUnifiedContactCard(person) {
 }
 
 /* ── ONGLET CONTACTS RESPONSABLE ────────────────────────── */
-function renderContactsTab() {
-  renderUnifiedContactsList();
-}
-
 function renderUnifiedContactsList() {
   const el = document.getElementById('unified-contacts-list');
   if (!el) return;
