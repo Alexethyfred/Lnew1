@@ -1703,6 +1703,30 @@ body .animate, body .spinner, body [class*="anim"] {
     </div>
 
     <!-- MODAL MESSAGE GROUPÉ WHATSAPP -->
+    <!-- MODAL REPROGRAMMATION APRÈS CONTACT RAPIDE -->
+    <div class="modal-overlay" id="modal-reprogrammer" style="display:none;">
+      <div class="modal" style="max-width:420px;">
+        <div class="modal-head">
+          <div class="modal-title">📅 Prochaine étape ?</div>
+          <button class="modal-close" onclick="fermerReprogrammation()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div id="reprog-nom-fiche" style="font-size:14px;font-weight:700;margin-bottom:14px;text-align:center;"></div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <button class="btn btn-outline btn-full" style="text-align:left;padding:14px 16px;" onclick="choisirReprogrammation(14, 'À recontacter')">
+              📞 <strong>À recontacter</strong> — dans 2 semaines
+            </button>
+            <button class="btn btn-outline btn-full" style="text-align:left;padding:14px 16px;" onclick="choisirReprogrammation(30, 'À revisiter')">
+              🚶 <strong>À revisiter</strong> — dans 1 mois <span style="font-size:10px;color:var(--mu);">(suggestion charte)</span>
+            </button>
+            <button class="btn btn-full" style="text-align:left;padding:14px 16px;background:var(--bg2);" onclick="choisirReprogrammation(null, null)">
+              ✅ Pas de suite à prévoir pour l'instant
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-overlay" id="modal-msg-groupe" style="display:none;">
       <div class="modal" style="max-width:520px;">
         <div class="modal-head">
@@ -3699,9 +3723,54 @@ async function quickLogActivity(ficheId, type, event) {
       }).catch(() => {});
     }
     toast(`✅ ${noteDefaut} — ${fiche.nom}`);
+    // Propose immédiatement de reprogrammer la suite — c'est ce qui efface
+    // vraiment le "retard" (une date de suivi doit être reprogrammée ou
+    // explicitement clôturée, pas juste silencieusement oubliée).
+    ouvrirReprogrammation(ficheId, `${fiche.nom || ''} ${fiche.prenom || ''}`.trim());
   } catch (e) {
     console.error(e);
     toast('❌ Erreur lors de l\'enregistrement');
+  }
+}
+
+/* ── REPROGRAMMATION APRÈS CONTACT RAPIDE ──
+   Le tap 📞/🚶 seul n'effaçait pas le retard (l'activité était juste
+   loggée). Ici, on referme vraiment la boucle : soit une nouvelle date
+   est programmée (avec suggestion +2 semaines / +1 mois), soit on
+   clôture explicitement — jamais un oubli silencieux. ── */
+let _reprogFicheId = null;
+
+function ouvrirReprogrammation(ficheId, nomFiche) {
+  _reprogFicheId = ficheId;
+  const el = document.getElementById('reprog-nom-fiche');
+  if (el) el.textContent = nomFiche || '';
+  const modal = document.getElementById('modal-reprogrammer');
+  if (modal) modal.style.display = 'flex';
+}
+
+function fermerReprogrammation() {
+  const modal = document.getElementById('modal-reprogrammer');
+  if (modal) modal.style.display = 'none';
+  _reprogFicheId = null;
+}
+
+async function choisirReprogrammation(joursPlusTard, label) {
+  if (!_reprogFicheId) { fermerReprogrammation(); return; }
+  const ficheId = _reprogFicheId;
+  try {
+    let newDate = null;
+    if (joursPlusTard) {
+      const d = new Date();
+      d.setDate(d.getDate() + joursPlusTard);
+      newDate = d.toISOString().split('T')[0];
+    }
+    await window._completeAction(ficheId, null, null, label, newDate, whoAmI());
+    toast(label ? `✅ Reprogrammé : ${label}` : '✅ Aucune suite programmée');
+  } catch (e) {
+    console.error(e);
+    toast('❌ Erreur lors de la reprogrammation');
+  } finally {
+    fermerReprogrammation();
   }
 }
 
@@ -3847,6 +3916,12 @@ function toggleFiltresAvances() {
 }
 
 function renderFiches() {
+  // Le message groupé WhatsApp et la sélection multiple sont réservés à
+  // l'évangéliste — le dashboard responsable ne sert qu'au suivi, pas à l'envoi.
+  const btnSelection = document.getElementById('btn-mode-selection');
+  if (btnSelection) btnSelection.style.display = (S.role === 'ev') ? 'inline-block' : 'none';
+  if (S.role !== 'ev' && _selectionModeActif) { _selectionModeActif = false; _fichesSelectionnees.clear(); }
+
   const q   = document.getElementById('db-search').value.toLowerCase();
   const fst = document.getElementById('db-fst').value;
   const fev = document.getElementById('db-fev').value;
@@ -3916,8 +3991,8 @@ function renderFiches() {
 
     })();
     return `
-    <div class="fiche-item" onclick="${_selectionModeActif ? `toggleSelectionFiche('${f.id}', event)` : `openFicheModal('${f.id}')`}" style="position:relative;${_selectionModeActif && _fichesSelectionnees.has(f.id) ? 'outline:2px solid var(--c1);outline-offset:-2px;' : ''}">
-      ${_selectionModeActif ? `<div style="position:absolute;top:12px;right:12px;width:22px;height:22px;border-radius:6px;border:2px solid var(--c1);background:${_fichesSelectionnees.has(f.id) ? 'var(--c1)' : 'var(--surface)'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;">${_fichesSelectionnees.has(f.id) ? '✓' : ''}</div>` : ''}
+    <div class="fiche-item" onclick="${(_selectionModeActif && S.role==='ev') ? `toggleSelectionFiche('${f.id}', event)` : `openFicheModal('${f.id}')`}" style="position:relative;${(_selectionModeActif && S.role==='ev' && _fichesSelectionnees.has(f.id)) ? 'outline:2px solid var(--c1);outline-offset:-2px;' : ''}">
+      ${(_selectionModeActif && S.role==='ev') ? `<div style="position:absolute;top:12px;right:12px;width:22px;height:22px;border-radius:6px;border:2px solid var(--c1);background:${_fichesSelectionnees.has(f.id) ? 'var(--c1)' : 'var(--surface)'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;">${_fichesSelectionnees.has(f.id) ? '✓' : ''}</div>` : ''}
       <div class="fiche-item-top">
         <div>
           <div class="fiche-nom">${f.nom||''} ${f.prenom||''} ${coldBadge}</div>
@@ -3927,7 +4002,7 @@ function renderFiches() {
       </div>
       <div class="fiche-badges">${sexBadge} ${statusBadge} ${f.baptise==='oui'?'<span class="badge badge-new">💧 Baptisé</span>':''} ${membreBadge}</div>
       ${f.evangelisteNom ? `<div class="fiche-ev">👤 ${f.evangelisteNom}${obsCnt ? ` &nbsp;·&nbsp; 💬 ${obsCnt} obs.` : ''}</div>` : ''}
-      ${!_selectionModeActif ? `
+      ${(S.role==='ev' && !_selectionModeActif) ? `
       <div style="display:flex;gap:6px;margin-top:8px;" onclick="event.stopPropagation()">
         <button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity('${f.id}','appel',event)">📞 Appelé</button>
         <button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity('${f.id}','visite',event)">🚶 Visité</button>
