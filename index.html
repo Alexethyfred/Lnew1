@@ -1665,102 +1665,15 @@ body .animate, body .spinner, body [class*="anim"] {
           <option value="perdu_de_vue">Perdu de vue</option>
           <option value="depart_definitif">Départ définitif</option>
         </select>
+        <select id="db-fcompletude" onchange="renderFiches()">
+          <option value="">Toutes les fiches</option>
+          <option value="incomplete">⚠️ Infos manquantes</option>
+        </select>
 
-      </div>
-
-      <button type="button" onclick="toggleFiltresAvances()" id="btn-filtres-avances" style="background:none;border:none;color:var(--c1);font-size:12.5px;font-weight:700;padding:6px 2px;cursor:pointer;display:flex;align-items:center;gap:5px;">
-        <span id="filtres-avances-arrow">▸</span> Filtres avancés
-      </button>
-      <button type="button" onclick="toggleModeSelection()" id="btn-mode-selection" style="background:none;border:none;color:var(--c1);font-size:12.5px;font-weight:700;padding:6px 2px 6px 14px;cursor:pointer;">
-        ☑️ Message groupé WhatsApp
-      </button>
-      <div id="filtres-avances-panel" class="toolbar" style="display:none;background:var(--surface);border:1.5px solid var(--bo);border-radius:12px;padding:14px 16px;margin-bottom:12px;">
-          <select id="db-fbaptise" onchange="renderFiches()">
-            <option value="">Baptisé — tous</option>
-            <option value="oui">💧 Baptisé</option>
-            <option value="non">Non baptisé</option>
-          </select>
-          <select id="db-fsexe" onchange="renderFiches()">
-            <option value="">Sexe — tous</option>
-            <option value="M">♂ Homme</option>
-            <option value="F">♀ Femme</option>
-          </select>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx);cursor:pointer;background:var(--bg2);border:1.5px solid var(--bo);border-radius:var(--r-sm);padding:9px 14px;">
-            <input type="checkbox" id="db-ffroide" onchange="renderFiches()" style="accent-color:var(--c1);width:15px;height:15px;cursor:pointer;"> 🧊 Fiches froides uniquement
-          </label>
       </div>
 
       <div class="fiche-list" id="fiche-list">
         <div class="empty-state"><div class="ico">⏳</div><p>Chargement en cours…</p></div>
-      </div>
-    </div>
-
-    <!-- BARRE FLOTTANTE SÉLECTION MULTIPLE -->
-    <div id="selection-bar" style="display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:200;background:var(--c1);color:#fff;border-radius:40px;padding:10px 10px 10px 20px;box-shadow:0 8px 30px rgba(0,0,0,0.25);display:flex;align-items:center;gap:12px;max-width:92vw;">
-      <span id="selection-count" style="font-size:13px;font-weight:700;white-space:nowrap;">0 sélectionnée(s)</span>
-      <button class="btn" style="background:#fff;color:var(--c1);border-radius:30px;padding:8px 16px;font-size:13px;font-weight:700;white-space:nowrap;" onclick="ouvrirMessageGroupe()">💬 Écrire le message</button>
-      <button class="btn-icon" style="color:#fff;font-size:18px;" onclick="toggleModeSelection()" title="Annuler">✕</button>
-    </div>
-
-    <!-- MODAL MESSAGE GROUPÉ WHATSAPP -->
-    <!-- MODAL REPROGRAMMATION APRÈS CONTACT RAPIDE -->
-    <div class="modal-overlay" id="modal-reprogrammer" style="display:none;">
-      <div class="modal" style="max-width:420px;">
-        <div class="modal-head">
-          <div class="modal-title">📅 Prochaine étape ?</div>
-          <button class="modal-close" onclick="fermerReprogrammation()">✕</button>
-        </div>
-        <div class="modal-body">
-          <div id="reprog-nom-fiche" style="font-size:14px;font-weight:700;margin-bottom:14px;text-align:center;"></div>
-          <div style="display:flex;flex-direction:column;gap:10px;">
-            <button class="btn btn-outline btn-full" style="text-align:left;padding:14px 16px;" onclick="choisirReprogrammation(14, 'À recontacter')">
-              📞 <strong>À recontacter</strong> — dans 2 semaines
-            </button>
-            <button class="btn btn-outline btn-full" style="text-align:left;padding:14px 16px;" onclick="choisirReprogrammation(30, 'À revisiter')">
-              🚶 <strong>À revisiter</strong> — dans 1 mois <span style="font-size:10px;color:var(--mu);">(suggestion charte)</span>
-            </button>
-            <button class="btn btn-full" style="text-align:left;padding:14px 16px;background:var(--bg2);" onclick="choisirReprogrammation(null, null)">
-              ✅ Pas de suite à prévoir pour l'instant
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal-overlay" id="modal-msg-groupe" style="display:none;">
-      <div class="modal" style="max-width:520px;">
-        <div class="modal-head">
-          <div class="modal-title">💬 Message groupé WhatsApp</div>
-          <button class="modal-close" onclick="fermerMessageGroupe()">✕</button>
-        </div>
-        <div class="modal-body">
-          <div id="msg-groupe-etape-redaction">
-            <div style="font-size:12.5px;color:var(--mu);margin-bottom:10px;">Écrivez le message une seule fois. Utilisez <code>{prenom}</code> pour qu'il soit personnalisé automatiquement pour chaque contact.</div>
-            <div style="position:relative;">
-              <textarea id="msg-groupe-texte" rows="6" placeholder="Bonjour {prenom}, ..." style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 40px 9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:vertical;width:100%;color:var(--tx);"></textarea>
-              <button type="button" class="btn-mic" id="msg-groupe-mic" onclick="toggleDictee('msg-groupe-texte','msg-groupe-mic')" title="Dicter le message">🎤</button>
-            </div>
-            <button class="btn btn-primary btn-full" style="margin-top:14px;" onclick="demarrerEnvoiGroupe()">▶️ Démarrer l'envoi (<span id="msg-groupe-nb-select">0</span> contact(s))</button>
-          </div>
-          <div id="msg-groupe-etape-envoi" style="display:none;">
-            <div style="text-align:center;margin-bottom:14px;">
-              <div style="font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Contact <span id="msg-groupe-position"></span></div>
-              <div id="msg-groupe-nom-contact" style="font-size:19px;font-weight:800;margin-top:4px;"></div>
-            </div>
-            <div style="background:var(--bg2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--tx);white-space:pre-wrap;margin-bottom:16px;max-height:150px;overflow-y:auto;" id="msg-groupe-apercu"></div>
-            <a id="msg-groupe-lien-wa" href="#" target="_blank" rel="noopener" class="btn btn-primary btn-full" style="margin-bottom:10px;display:block;text-align:center;text-decoration:none;">💬 Ouvrir WhatsApp pour envoyer</a>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-outline" style="flex:1;" onclick="passerContactGroupe()">Passer (sans envoyer)</button>
-              <button class="btn btn-primary" style="flex:1;" onclick="confirmerEnvoiGroupe()">✅ Envoyé, suivant</button>
-            </div>
-          </div>
-          <div id="msg-groupe-etape-fin" style="display:none;text-align:center;padding:20px 0;">
-            <div style="font-size:40px;margin-bottom:10px;">✅</div>
-            <div style="font-size:15px;font-weight:700;">Terminé !</div>
-            <div style="font-size:13px;color:var(--mu);margin-top:6px;" id="msg-groupe-recap"></div>
-            <button class="btn btn-primary" style="margin-top:16px;" onclick="fermerMessageGroupe()">Fermer</button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -2478,7 +2391,11 @@ body .animate, body .spinner, body [class*="anim"] {
         <div id="upcoming-list"></div>
       </div>
 
-      <input type="text" class="toolbar" style="width:100%;margin-bottom:14px;border-radius:10px;padding:10px 14px;font-size:13px;border:1.5px solid var(--bo);background:var(--surface);outline:none;" placeholder="🔍 Rechercher..." id="ev-fiche-search" oninput="renderEvFiches()">
+      <input type="text" class="toolbar" style="width:100%;margin-bottom:10px;border-radius:10px;padding:10px 14px;font-size:13px;border:1.5px solid var(--bo);background:var(--surface);outline:none;" placeholder="🔍 Rechercher..." id="ev-fiche-search" oninput="renderEvFiches()">
+
+      <button type="button" onclick="toggleModeSelection()" id="ev-btn-mode-selection" style="background:none;border:none;color:var(--c1);font-size:12.5px;font-weight:700;padding:4px 2px 12px;cursor:pointer;">
+        ☑️ Message groupé WhatsApp
+      </button>
 
       <div id="ev-fiche-list">
         <div class="empty-state"><div class="ico">⏳</div><p>Chargement…</p></div>
@@ -3698,7 +3615,7 @@ function toggleDictee(textareaId, btnId) {
 
 async function quickLogActivity(ficheId, type, event) {
   if (event) event.stopPropagation();
-  const fiche = S.fiches.find(f => f.id === ficheId);
+  const fiche = (S.fiches || []).find(f => f.id === ficheId) || (S.myFiches || []).find(f => f.id === ficheId);
   if (!fiche) return;
   const today = new Date().toISOString().split('T')[0];
   const noteDefaut = { appel: 'Appel effectué', visite: 'Visite effectuée', message: 'Message envoyé' }[type] || 'Contact effectué';
@@ -3793,9 +3710,9 @@ let _envoiGroupeEnvoyes = 0;
 function toggleModeSelection() {
   _selectionModeActif = !_selectionModeActif;
   if (!_selectionModeActif) _fichesSelectionnees.clear();
-  const btn = document.getElementById('btn-mode-selection');
+  const btn = document.getElementById('ev-btn-mode-selection');
   if (btn) btn.textContent = _selectionModeActif ? '✕ Annuler la sélection' : '☑️ Message groupé WhatsApp';
-  renderFiches();
+  renderEvFiches();
   majBarreSelection();
 }
 
@@ -3803,7 +3720,7 @@ function toggleSelectionFiche(ficheId, event) {
   if (event) event.stopPropagation();
   if (_fichesSelectionnees.has(ficheId)) _fichesSelectionnees.delete(ficheId);
   else _fichesSelectionnees.add(ficheId);
-  renderFiches();
+  renderEvFiches();
   majBarreSelection();
 }
 
@@ -3836,7 +3753,7 @@ function demarrerEnvoiGroupe() {
   const texte = document.getElementById('msg-groupe-texte')?.value.trim();
   if (!texte) { toast('⚠️ Écrivez un message'); return; }
   _envoiGroupeTexte = texte;
-  _envoiGroupeQueue = getFiches().filter(f => _fichesSelectionnees.has(f.id) && (f.telephone || '').trim());
+  _envoiGroupeQueue = (S.myFiches || []).filter(f => !f.deleted && _fichesSelectionnees.has(f.id) && (f.telephone || '').trim());
   _envoiGroupeIndex = 0;
   _envoiGroupeEnvoyes = 0;
 
@@ -3906,22 +3823,7 @@ function terminerEnvoiGroupe() {
   toggleModeSelection(); // sort du mode sélection proprement
 }
 
-function toggleFiltresAvances() {
-  const panel = document.getElementById('filtres-avances-panel');
-  const arrow = document.getElementById('filtres-avances-arrow');
-  if (!panel) return;
-  const isOpen = panel.style.display !== 'none';
-  panel.style.display = isOpen ? 'none' : 'flex';
-  if (arrow) arrow.textContent = isOpen ? '▸' : '▾';
-}
-
 function renderFiches() {
-  // Le message groupé WhatsApp et la sélection multiple sont réservés à
-  // l'évangéliste — le dashboard responsable ne sert qu'au suivi, pas à l'envoi.
-  const btnSelection = document.getElementById('btn-mode-selection');
-  if (btnSelection) btnSelection.style.display = (S.role === 'ev') ? 'inline-block' : 'none';
-  if (S.role !== 'ev' && _selectionModeActif) { _selectionModeActif = false; _fichesSelectionnees.clear(); }
-
   const q   = document.getElementById('db-search').value.toLowerCase();
   const fst = document.getElementById('db-fst').value;
   const fev = document.getElementById('db-fev').value;
@@ -3929,9 +3831,7 @@ function renderFiches() {
   const fzone  = document.getElementById('db-fzone')?.value  || '';
   const fecole  = document.getElementById('db-fecole')?.value || '';
   const fmembre = document.getElementById('db-fmembre')?.value || '';
-  const fbaptise = document.getElementById('db-fbaptise')?.value || '';
-  const fsexe    = document.getElementById('db-fsexe')?.value || '';
-  const ffroide  = document.getElementById('db-ffroide')?.checked || false;
+  const fcompletude = document.getElementById('db-fcompletude')?.value || '';
   const todayStr = new Date().toISOString().split('T')[0];
   // Exclure fiches supprimées (soft-delete) directement ici
   let list = S.fiches.filter(f => !f.deleted).filter(f => {
@@ -3941,15 +3841,13 @@ function renderFiches() {
     const mzone  = !fzone  || normalizeStr(f.quartier||'') === normalizeStr(fzone);
     const mecole = !fecole || normalizeStr(f.ecole||'') === normalizeStr(fecole);
     const mmembre = !fmembre || f.statutMembre === fmembre;
-    const mbaptise = !fbaptise || (fbaptise === 'oui' ? f.baptise === 'oui' : f.baptise !== 'oui');
-    const msexe = !fsexe || f.sexe === fsexe;
-    const mfroide = !ffroide || (() => {
-      const lastUpdate = f.updatedAt?.toDate ? f.updatedAt.toDate() : (f.createdAt?.toDate ? f.createdAt.toDate() : new Date(f.timestamp||0));
-      return ((new Date() - lastUpdate) / 86400000) > 30 && f.statut !== 'visite';
-    })();
+    // Fiche "incomplète" : il manque au moins une info clé pour bien suivre la personne
+    const mcompletude = !fcompletude || (fcompletude === 'incomplete' && (
+      !f.telephone || !f.nationalite || !f.quartier || !f.sexe || !f.evangelisteId
+    ));
     // Filtre retard
     const mretard = !_filtreRetardActif || (f.nextActionDate && f.nextActionDate < todayStr);
-    return mq && mst && mev && mzone && mecole && mmembre && mbaptise && msexe && mfroide && mretard;
+    return mq && mst && mev && mzone && mecole && mmembre && mcompletude && mretard;
   });
 
   const el = document.getElementById('fiche-list');
@@ -3991,8 +3889,7 @@ function renderFiches() {
 
     })();
     return `
-    <div class="fiche-item" onclick="${(_selectionModeActif && S.role==='ev') ? `toggleSelectionFiche('${f.id}', event)` : `openFicheModal('${f.id}')`}" style="position:relative;${(_selectionModeActif && S.role==='ev' && _fichesSelectionnees.has(f.id)) ? 'outline:2px solid var(--c1);outline-offset:-2px;' : ''}">
-      ${(_selectionModeActif && S.role==='ev') ? `<div style="position:absolute;top:12px;right:12px;width:22px;height:22px;border-radius:6px;border:2px solid var(--c1);background:${_fichesSelectionnees.has(f.id) ? 'var(--c1)' : 'var(--surface)'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;">${_fichesSelectionnees.has(f.id) ? '✓' : ''}</div>` : ''}
+    <div class="fiche-item" onclick="openFicheModal('${f.id}')">
       <div class="fiche-item-top">
         <div>
           <div class="fiche-nom">${f.nom||''} ${f.prenom||''} ${coldBadge}</div>
@@ -4002,11 +3899,6 @@ function renderFiches() {
       </div>
       <div class="fiche-badges">${sexBadge} ${statusBadge} ${f.baptise==='oui'?'<span class="badge badge-new">💧 Baptisé</span>':''} ${membreBadge}</div>
       ${f.evangelisteNom ? `<div class="fiche-ev">👤 ${f.evangelisteNom}${obsCnt ? ` &nbsp;·&nbsp; 💬 ${obsCnt} obs.` : ''}</div>` : ''}
-      ${(S.role==='ev' && !_selectionModeActif) ? `
-      <div style="display:flex;gap:6px;margin-top:8px;" onclick="event.stopPropagation()">
-        <button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity('${f.id}','appel',event)">📞 Appelé</button>
-        <button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity('${f.id}','visite',event)">🚶 Visité</button>
-      </div>` : ''}
     </div>`;
   }).join('');
 }
@@ -5761,8 +5653,21 @@ function renderEvFicheCard(f) {
       + '</div>'
     : '';
 
-  return '<div class="ev-fiche-card' + (isOpen?' open':'') + '" id="efc-' + f.id + '">'
-    + '<div class="ev-fiche-top" onclick="toggleEvFiche(\'' + f.id + '\')">'
+  const quickBtns = '<div style="display:flex;gap:7px;margin-top:7px;" onclick="event.stopPropagation()">'
+    + '<button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity(\'' + f.id + '\',\'appel\',event)">📞 Appelé</button>'
+    + '<button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity(\'' + f.id + '\',\'visite\',event)">🚶 Visité</button>'
+    + '</div>';
+
+  const selectionMode = _selectionModeActif;
+  const estSelectionnee = _fichesSelectionnees.has(f.id);
+  const checkbox = selectionMode
+    ? '<div style="position:absolute;top:14px;right:14px;width:22px;height:22px;border-radius:6px;border:2px solid var(--c1);background:' + (estSelectionnee ? 'var(--c1)' : 'var(--surface)') + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;z-index:2;">' + (estSelectionnee ? '✓' : '') + '</div>'
+    : '';
+  const topClick = selectionMode ? "toggleSelectionFiche('" + f.id + "', event)" : "toggleEvFiche('" + f.id + "')";
+
+  return '<div class="ev-fiche-card' + (isOpen?' open':'') + '" id="efc-' + f.id + '" style="position:relative;' + (selectionMode && estSelectionnee ? 'outline:2px solid var(--c1);outline-offset:-2px;' : '') + '">'
+    + checkbox
+    + '<div class="ev-fiche-top" onclick="' + topClick + '">'
     + '<div style="flex:1">'
     + '<div class="fiche-nom">' + (f.nom||'') + ' ' + (f.prenom||'') + '</div>'
     + '<div class="fiche-meta">\ud83d\udcde ' + (f.telephone||'\u2014') + ' \u00b7 ' + (f.nationalite||'') + ' \u00b7 ' + (f.quartier||'') + '</div>'
@@ -5771,9 +5676,9 @@ function renderEvFicheCard(f) {
     + statutBadge
     + (f.nextActionDate ? '<span class="vbadge ' + (f.nextActionDate < today ? 'vb-late' : 'vb-ok') + '">\u26a1 ' + (f.nextAction||'Action') + ' \u00b7 ' + f.nextActionDate + '</span>' : '')
     + '</div>'
-    + contactBtns
+    + (!selectionMode ? contactBtns + quickBtns : '')
     + '</div>'
-    + '<span class="ev-fiche-arrow">\u25b6</span>'
+    + (!selectionMode ? '<span class="ev-fiche-arrow">\u25b6</span>' : '')
     + '</div>'
     + '<div class="obs-panel' + (isOpen?' show':'') + '" id="efp-' + f.id + '">'
     + '<div class="obs-panel-inner">'
@@ -11834,6 +11739,75 @@ if (_origInitDash) {
 </div>
 
 <!-- ── MODAL CHANGEMENT MOT DE PASSE RESPONSABLE ─────────── -->
+<!-- BARRE FLOTTANTE SÉLECTION MULTIPLE (globale — utilisée uniquement côté évangéliste) -->
+<div id="selection-bar" style="display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:200;background:var(--c1);color:#fff;border-radius:40px;padding:10px 10px 10px 20px;box-shadow:0 8px 30px rgba(0,0,0,0.25);align-items:center;gap:12px;max-width:92vw;">
+  <span id="selection-count" style="font-size:13px;font-weight:700;white-space:nowrap;">0 sélectionnée(s)</span>
+  <button class="btn" style="background:#fff;color:var(--c1);border-radius:30px;padding:8px 16px;font-size:13px;font-weight:700;white-space:nowrap;" onclick="ouvrirMessageGroupe()">💬 Écrire le message</button>
+  <button class="btn-icon" style="color:#fff;font-size:18px;" onclick="toggleModeSelection()" title="Annuler">✕</button>
+</div>
+
+<!-- MODAL REPROGRAMMATION APRÈS CONTACT RAPIDE (global — accessible depuis screen-ev ET screen-dashboard) -->
+<div class="modal-overlay" id="modal-reprogrammer" style="display:none;z-index:9999;">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-head">
+      <div class="modal-title">📅 Prochaine étape ?</div>
+      <button class="modal-close" onclick="fermerReprogrammation()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="reprog-nom-fiche" style="font-size:14px;font-weight:700;margin-bottom:14px;text-align:center;"></div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="btn btn-outline btn-full" style="text-align:left;padding:14px 16px;" onclick="choisirReprogrammation(14, 'À recontacter')">
+          📞 <strong>À recontacter</strong> — dans 2 semaines
+        </button>
+        <button class="btn btn-outline btn-full" style="text-align:left;padding:14px 16px;" onclick="choisirReprogrammation(30, 'À revisiter')">
+          🚶 <strong>À revisiter</strong> — dans 1 mois <span style="font-size:10px;color:var(--mu);">(suggestion charte)</span>
+        </button>
+        <button class="btn btn-full" style="text-align:left;padding:14px 16px;background:var(--bg2);" onclick="choisirReprogrammation(null, null)">
+          ✅ Pas de suite à prévoir pour l'instant
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MESSAGE GROUPÉ WHATSAPP (global) -->
+<div class="modal-overlay" id="modal-msg-groupe" style="display:none;z-index:9999;">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-head">
+      <div class="modal-title">💬 Message groupé WhatsApp</div>
+      <button class="modal-close" onclick="fermerMessageGroupe()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="msg-groupe-etape-redaction">
+        <div style="font-size:12.5px;color:var(--mu);margin-bottom:10px;">Écrivez le message une seule fois. Utilisez <code>{prenom}</code> pour qu'il soit personnalisé automatiquement pour chaque contact.</div>
+        <div style="position:relative;">
+          <textarea id="msg-groupe-texte" rows="6" placeholder="Bonjour {prenom}, ..." style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 40px 9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:vertical;width:100%;color:var(--tx);"></textarea>
+          <button type="button" class="btn-mic" id="msg-groupe-mic" onclick="toggleDictee('msg-groupe-texte','msg-groupe-mic')" title="Dicter le message">🎤</button>
+        </div>
+        <button class="btn btn-primary btn-full" style="margin-top:14px;" onclick="demarrerEnvoiGroupe()">▶️ Démarrer l'envoi (<span id="msg-groupe-nb-select">0</span> contact(s))</button>
+      </div>
+      <div id="msg-groupe-etape-envoi" style="display:none;">
+        <div style="text-align:center;margin-bottom:14px;">
+          <div style="font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Contact <span id="msg-groupe-position"></span></div>
+          <div id="msg-groupe-nom-contact" style="font-size:19px;font-weight:800;margin-top:4px;"></div>
+        </div>
+        <div style="background:var(--bg2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--tx);white-space:pre-wrap;margin-bottom:16px;max-height:150px;overflow-y:auto;" id="msg-groupe-apercu"></div>
+        <a id="msg-groupe-lien-wa" href="#" target="_blank" rel="noopener" class="btn btn-primary btn-full" style="margin-bottom:10px;display:block;text-align:center;text-decoration:none;">💬 Ouvrir WhatsApp pour envoyer</a>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline" style="flex:1;" onclick="passerContactGroupe()">Passer (sans envoyer)</button>
+          <button class="btn btn-primary" style="flex:1;" onclick="confirmerEnvoiGroupe()">✅ Envoyé, suivant</button>
+        </div>
+      </div>
+      <div id="msg-groupe-etape-fin" style="display:none;text-align:center;padding:20px 0;">
+        <div style="font-size:40px;margin-bottom:10px;">✅</div>
+        <div style="font-size:15px;font-weight:700;">Terminé !</div>
+        <div style="font-size:13px;color:var(--mu);margin-top:6px;" id="msg-groupe-recap"></div>
+        <button class="btn btn-primary" style="margin-top:16px;" onclick="fermerMessageGroupe()">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-chg-pwd" style="z-index:9999;">
   <div class="modal" style="max-width:400px;">
     <div class="modal-head" style="background:var(--c5);">
