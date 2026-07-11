@@ -2418,7 +2418,7 @@ body .animate, body .spinner, body [class*="anim"] {
             <option value="message">💬 Message</option>
           </select>
         </div>
-        <textarea id="ev-act-note" placeholder="Compte-rendu *" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:8px 10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical;min-height:60px;width:100%;margin-bottom:8px;color:var(--tx);"></textarea>
+        <textarea id="ev-act-note" placeholder="Compte-rendu (optionnel)" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:8px 10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical;min-height:60px;width:100%;margin-bottom:8px;color:var(--tx);"></textarea>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
           <input type="text" id="ev-act-next" placeholder="Prochaine action…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:8px 10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
           <input type="date" id="ev-act-next-date" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:8px 10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
@@ -3613,6 +3613,64 @@ function toggleDictee(textareaId, btnId) {
   }
 }
 
+/* ── Suggestion "à recontacter" (+2 sem.) / "à revisiter" (+1 mois) ──
+   Pré-remplit les 2 champs déjà existants du formulaire — la saisie
+   manuelle reste toujours possible, rien n'est imposé. ── */
+/* ── BADGE SUR L'ICÔNE DE L'APP (Badging API) ──
+   Affiche le nombre de fiches en retard directement sur l'icône de
+   l'app, sur l'écran d'accueil du téléphone — sans avoir besoin
+   d'ouvrir l'app ni de lire une notification. Gratuit, natif au
+   navigateur. Fonctionne mieux sur Android (limite Apple sur iPhone,
+   même contrainte que pour les notifications). Échoue silencieusement
+   si non supporté — aucun risque. ── */
+function majBadgeIcone() {
+  if (!S.myFiches) return;
+  const today = new Date().toISOString().split('T')[0];
+  const nbRetard = S.myFiches.filter(f => !f.deleted && f.nextActionDate && f.nextActionDate < today).length;
+  try {
+    if (nbRetard > 0 && 'setAppBadge' in navigator) {
+      navigator.setAppBadge(nbRetard).catch(() => {});
+    } else if ('clearAppBadge' in navigator) {
+      navigator.clearAppBadge().catch(() => {});
+    }
+  } catch (e) { /* API non supportée — ignoré silencieusement */ }
+}
+
+function suggererProchaineAction(ficheId, joursPlusTard, label) {
+  const champAction = document.getElementById(`af-next-${ficheId}`);
+  const champDate   = document.getElementById(`af-next-date-${ficheId}`);
+  if (!champAction || !champDate) return;
+  const d = new Date();
+  d.setDate(d.getDate() + joursPlusTard);
+  champAction.value = label;
+  champDate.value = d.toISOString().split('T')[0];
+}
+
+/* ── Modifier ou annuler une action déjà programmée, sans repasser
+   par tout le formulaire de compte-rendu. ── */
+async function modifierProchaineAction(ficheId, event) {
+  if (event) event.stopPropagation();
+  const fiche = (S.myFiches || []).find(f => f.id === ficheId);
+  if (!fiche) return;
+  const actionActuelle = fiche.nextAction || '';
+  const dateActuelle = fiche.nextActionDate || '';
+  const nouvelleAction = prompt('Modifier l\'action prévue (laisser vide pour annuler) :', actionActuelle);
+  if (nouvelleAction === null) return; // annulé par l'utilisateur
+  let nouvelleDate = '';
+  if (nouvelleAction.trim()) {
+    const saisie = prompt('Date prévue (AAAA-MM-JJ) :', dateActuelle || new Date().toISOString().split('T')[0]);
+    if (saisie === null) return;
+    nouvelleDate = saisie.trim();
+  }
+  try {
+    await window._completeAction(ficheId, null, null, nouvelleAction.trim() || null, nouvelleDate || null, whoAmI());
+    toast(nouvelleAction.trim() ? '✅ Action mise à jour' : '✅ Action annulée');
+  } catch (e) {
+    console.error(e);
+    toast('❌ Erreur');
+  }
+}
+
 async function quickLogActivity(ficheId, type, event) {
   if (event) event.stopPropagation();
   const fiche = (S.fiches || []).find(f => f.id === ficheId) || (S.myFiches || []).find(f => f.id === ficheId);
@@ -3640,54 +3698,9 @@ async function quickLogActivity(ficheId, type, event) {
       }).catch(() => {});
     }
     toast(`✅ ${noteDefaut} — ${fiche.nom}`);
-    // Propose immédiatement de reprogrammer la suite — c'est ce qui efface
-    // vraiment le "retard" (une date de suivi doit être reprogrammée ou
-    // explicitement clôturée, pas juste silencieusement oubliée).
-    ouvrirReprogrammation(ficheId, `${fiche.nom || ''} ${fiche.prenom || ''}`.trim());
   } catch (e) {
     console.error(e);
     toast('❌ Erreur lors de l\'enregistrement');
-  }
-}
-
-/* ── REPROGRAMMATION APRÈS CONTACT RAPIDE ──
-   Le tap 📞/🚶 seul n'effaçait pas le retard (l'activité était juste
-   loggée). Ici, on referme vraiment la boucle : soit une nouvelle date
-   est programmée (avec suggestion +2 semaines / +1 mois), soit on
-   clôture explicitement — jamais un oubli silencieux. ── */
-let _reprogFicheId = null;
-
-function ouvrirReprogrammation(ficheId, nomFiche) {
-  _reprogFicheId = ficheId;
-  const el = document.getElementById('reprog-nom-fiche');
-  if (el) el.textContent = nomFiche || '';
-  const modal = document.getElementById('modal-reprogrammer');
-  if (modal) modal.style.display = 'flex';
-}
-
-function fermerReprogrammation() {
-  const modal = document.getElementById('modal-reprogrammer');
-  if (modal) modal.style.display = 'none';
-  _reprogFicheId = null;
-}
-
-async function choisirReprogrammation(joursPlusTard, label) {
-  if (!_reprogFicheId) { fermerReprogrammation(); return; }
-  const ficheId = _reprogFicheId;
-  try {
-    let newDate = null;
-    if (joursPlusTard) {
-      const d = new Date();
-      d.setDate(d.getDate() + joursPlusTard);
-      newDate = d.toISOString().split('T')[0];
-    }
-    await window._completeAction(ficheId, null, null, label, newDate, whoAmI());
-    toast(label ? `✅ Reprogrammé : ${label}` : '✅ Aucune suite programmée');
-  } catch (e) {
-    console.error(e);
-    toast('❌ Erreur lors de la reprogrammation');
-  } finally {
-    fermerReprogrammation();
   }
 }
 
@@ -4912,6 +4925,7 @@ function initEvSpace() {
     showUpcoming();
     renderEvFiches();
     renderEvEvangelistesList();
+    majBadgeIcone();
     if (!S._rappelsAutoChecked) { S._rappelsAutoChecked = true; checkRappelsAutomatiques(); }
   });
 
@@ -5631,6 +5645,10 @@ function renderEvFicheCard(f) {
     + '<div class="field"><label>Date prochaine action</label>'
     + '<input type="date" id="af-next-date-' + f.id + '"></div>'
     + '</div>'
+    + '<div style="display:flex;gap:6px;margin:-4px 0 10px;">'
+    + '<button type="button" class="btn btn-outline btn-sm" style="flex:1;" onclick="suggererProchaineAction(\'' + f.id + '\', 14, \'\\ud83d\\udcf2 \\u00c0 recontacter\')">\ud83d\udcf2 Dans 2 sem. (\u00e0 recontacter)</button>'
+    + '<button type="button" class="btn btn-outline btn-sm" style="flex:1;" onclick="suggererProchaineAction(\'' + f.id + '\', 30, \'\\ud83d\\udeb6 \\u00c0 revisiter\')">\ud83d\udeb6 Dans 1 mois (\u00e0 revisiter)</button>'
+    + '</div>'
     + '<button class="btn btn-primary btn-full" id="af-btn-' + f.id + '" onclick="saveEvActivity(\'' + f.id + '\')">'
     + '\ud83d\udcbe Enregistrer</button>'
     + '</div>'
@@ -5674,7 +5692,7 @@ function renderEvFicheCard(f) {
     + '<div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;">'
     + suiviBadge
     + statutBadge
-    + (f.nextActionDate ? '<span class="vbadge ' + (f.nextActionDate < today ? 'vb-late' : 'vb-ok') + '">\u26a1 ' + (f.nextAction||'Action') + ' \u00b7 ' + f.nextActionDate + '</span>' : '')
+    + (f.nextActionDate ? '<span class="vbadge ' + (f.nextActionDate < today ? 'vb-late' : 'vb-ok') + '" style="cursor:pointer;" onclick="modifierProchaineAction(\'' + f.id + '\', event)" title="Modifier ou annuler">\u26a1 ' + (f.nextAction||'Action') + ' \u00b7 ' + f.nextActionDate + ' \u270f\ufe0f</span>' : '')
     + '</div>'
     + (!selectionMode ? contactBtns + quickBtns : '')
     + '</div>'
@@ -7745,6 +7763,10 @@ function renderEvAgenda() {
             </div>
             <div style="font-size:11px;color:${groupColor};font-weight:600;">${late ? `${diffAbs}j de retard` : isToday ? "Aujourd'hui !" : `${dateFmt}`}</div>
             ${lastActHtml}
+            <div style="display:flex;gap:6px;margin-top:8px;" onclick="event.stopPropagation()">
+              <button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity('${f.id}','appel',event)">📞 Appelé</button>
+              <button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity('${f.id}','visite',event)">🚶 Visité</button>
+            </div>
           </div>
 
         </div>
@@ -10537,7 +10559,7 @@ async function saveEvQuickActivity() {
   const nextDate= document.getElementById('ev-act-next-date')?.value || '';
 
   if (!ficheId) return toast('⚠️ Choisissez une fiche');
-  if (!note) return toast('⚠️ Entrez un compte-rendu');
+  const noteFinale = note || { appel: 'Appel effectué', visite: 'Visite effectuée', message: 'Message envoyé' }[type] || 'Contact effectué';
 
   const fiche = (S.myFiches||[]).find(f => f.id === ficheId);
   const today = new Date().toISOString().split('T')[0];
@@ -10545,7 +10567,7 @@ async function saveEvQuickActivity() {
   try {
     await window._saveActivity({
       ficheId, ficheNom: fiche ? fiche.nom + ' ' + fiche.prenom : '—',
-      type, note, date: today,
+      type, note: noteFinale, date: today,
       evangelisteId: S.evId, parId: S.evId,
       parNom: S.evNom, evNom: S.evNom,
       nextAction: next || null, nextActionDate: nextDate || null
@@ -11744,30 +11766,6 @@ if (_origInitDash) {
   <span id="selection-count" style="font-size:13px;font-weight:700;white-space:nowrap;">0 sélectionnée(s)</span>
   <button class="btn" style="background:#fff;color:var(--c1);border-radius:30px;padding:8px 16px;font-size:13px;font-weight:700;white-space:nowrap;" onclick="ouvrirMessageGroupe()">💬 Écrire le message</button>
   <button class="btn-icon" style="color:#fff;font-size:18px;" onclick="toggleModeSelection()" title="Annuler">✕</button>
-</div>
-
-<!-- MODAL REPROGRAMMATION APRÈS CONTACT RAPIDE (global — accessible depuis screen-ev ET screen-dashboard) -->
-<div class="modal-overlay" id="modal-reprogrammer" style="display:none;z-index:9999;">
-  <div class="modal" style="max-width:420px;">
-    <div class="modal-head">
-      <div class="modal-title">📅 Prochaine étape ?</div>
-      <button class="modal-close" onclick="fermerReprogrammation()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div id="reprog-nom-fiche" style="font-size:14px;font-weight:700;margin-bottom:14px;text-align:center;"></div>
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <button class="btn btn-outline btn-full" style="text-align:left;padding:14px 16px;" onclick="choisirReprogrammation(14, 'À recontacter')">
-          📞 <strong>À recontacter</strong> — dans 2 semaines
-        </button>
-        <button class="btn btn-outline btn-full" style="text-align:left;padding:14px 16px;" onclick="choisirReprogrammation(30, 'À revisiter')">
-          🚶 <strong>À revisiter</strong> — dans 1 mois <span style="font-size:10px;color:var(--mu);">(suggestion charte)</span>
-        </button>
-        <button class="btn btn-full" style="text-align:left;padding:14px 16px;background:var(--bg2);" onclick="choisirReprogrammation(null, null)">
-          ✅ Pas de suite à prévoir pour l'instant
-        </button>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- MODAL MESSAGE GROUPÉ WHATSAPP (global) -->
