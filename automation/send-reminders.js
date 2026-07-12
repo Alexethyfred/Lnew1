@@ -164,8 +164,8 @@ async function runRappelHebdo(now) {
     const { nbVisites, nbAppelsMsg } = await getRecapSemaine(ev.id, now);
 
     const contenu = mesFiches.length
-      ? `Bonjour ${ev.nom},\n\nBelle semaine à vous ! Voici votre point hebdomadaire de la Commission Témoignage :\n\nVos fiches à contacter d'ici lundi (${mesFiches.length}) :\n${mesFiches.map(f => `- ${f.nom} ${f.prenom}`).join('\n')}\n\nCette semaine : ${nbVisites} visite(s) effectuée(s), ${nbAppelsMsg} appel(s)/message(s) envoyé(s). Merci pour votre engagement fidèle !\n\n"${v.txt}" — ${v.ref}\n\nFraternellement,\nCommission Témoignage — EEAM Fès`
-      : `Bonjour ${ev.nom},\n\nBelle semaine à vous ! Petit rappel bi-mensuel : pensez à prendre des nouvelles des personnes que vous suivez d'ici lundi.\n\n"${v.txt}" — ${v.ref}\n\nFraternellement,\nCommission Témoignage — EEAM Fès`;
+      ? `Bonjour ${ev.nom},\n\nBelle semaine à vous ! Voici votre point hebdomadaire.\n\nFiches à contacter d'ici lundi (${mesFiches.length}) :\n${mesFiches.map(f => `- ${f.nom} ${f.prenom}`).join('\n')}\n\nCette semaine : ${nbVisites} visite(s) effectuée(s), ${nbAppelsMsg} appel(s)/message(s) envoyé(s). Merci pour votre engagement fidèle !\n\n"${v.txt}" (${v.ref})\n\nFraternellement,\nCommission Témoignage — EEAM Fès`
+      : `Bonjour ${ev.nom},\n\nBelle semaine à vous ! Petit rappel : pensez à prendre des nouvelles des personnes que vous suivez d'ici lundi.\n\n"${v.txt}" (${v.ref})\n\nFraternellement,\nCommission Témoignage — EEAM Fès`;
 
     await queueCommunication(`${ev.id}_${cle}_hebdo`, {
       type: 'hebdo', evId: ev.id, evNom: ev.nom, evEmail: ev.email || null, cle, contenu,
@@ -208,7 +208,7 @@ async function runRappelVisiteMensuelle(now) {
       : 'aucun signalé pour l\'instant — voir avec la responsable de zone';
 
     const v = versets[1];
-    const contenu = `Bonjour ${ev.nom},\n\nNouveau mois, nouvelle occasion de marcher aux côtés de ceux que vous suivez !\n\nPensez à programmer une visite accompagnée ce mois-ci pour vos ${mesFiches.length} fiche(s) :\n${mesFiches.map(f => `- ${f.nom} ${f.prenom}`).join('\n')}\n\nAccompagnateur(s) suggéré(s) : ${nomsCollegues}\n\n"${v.txt}" — ${v.ref}\n\nFraternellement,\nCommission Témoignage — EEAM Fès`;
+    const contenu = `Bonjour ${ev.nom},\n\nNouveau mois, nouvelle occasion de marcher aux côtés de ceux que vous suivez !\n\nPensez à programmer une visite accompagnée ce mois-ci pour vos ${mesFiches.length} fiche(s) :\n${mesFiches.map(f => `- ${f.nom} ${f.prenom}`).join('\n')}\n\nAccompagnateur(s) suggéré(s) : ${nomsCollegues}\n\n"${v.txt}" (${v.ref})\n\nFraternellement,\nCommission Témoignage — EEAM Fès`;
 
     await queueCommunication(`${ev.id}_${cle}_visite`, {
       type: 'visite_mois', evId: ev.id, evNom: ev.nom, evEmail: ev.email || null, cle, contenu,
@@ -234,7 +234,7 @@ async function runSortiesCollectives() {
     const dateLabel = new Date(s.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
     for (const ev of evs) {
-      const contenu = `Bonjour ${ev.nom},\n\nUne nouvelle sortie d'évangélisation vous attend ! Venez nombreux, votre présence compte pour l'équipe :\n\nLieu : ${s.lieu}\nDate : ${dateLabel}\n${s.description ? `Détail : ${s.description}\n` : ''}\nMerci d'indiquer votre présence dans l'app (Je viens / Je ne peux pas) dès que possible.\n\n"${versets[1].txt}" — ${versets[1].ref}\n\nFraternellement,\nCommission Témoignage — EEAM Fès`;
+      const contenu = `Bonjour ${ev.nom},\n\nUne nouvelle sortie d'évangélisation vous attend ! Venez nombreux, votre présence compte pour l'équipe.\n\nLieu : ${s.lieu}\nDate : ${dateLabel}\n${s.description ? `Détail : ${s.description}\n` : ''}\nMerci d'indiquer votre présence dans l'app (Je viens / Je ne peux pas) dès que possible.\n\n"${versets[1].txt}" (${versets[1].ref})\n\nFraternellement,\nCommission Témoignage — EEAM Fès`;
 
       await queueCommunication(`${doc.id}_${ev.id}_sortie`, {
         type: 'sortie', evId: ev.id, evNom: ev.nom, evEmail: ev.email || null,
@@ -282,7 +282,7 @@ async function runRappelActionPrevue(now) {
     const dateLabel = new Date(dateCible).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
     const v = versets[Math.floor(Math.random() * versets.length)];
 
-    const contenu = `Bonjour ${ev.nom},\n\nUn temps précieux approche : vous avez prévu "${actionTexte}" avec ${nomFiche} ${dateLabel} (dans 2 jours).\n\nPrenez un moment pour prier pour cette rencontre et pour ${nomFiche}. Que le Seigneur prépare les coeurs et vous donne les mots justes !\n\n"${v.txt}" — ${v.ref}\n\nQue Dieu vous bénisse et vous accompagne.\n\nFraternellement,\nCommission Témoignage — EEAM Fès`;
+    const contenu = `Bonjour ${ev.nom},\n\nUn rendez-vous approche : "${actionTexte}" avec ${nomFiche}, ${dateLabel} (dans 2 jours).\n\nPrenez un moment pour prier pour cette rencontre et pour ${nomFiche}. Que le Seigneur prépare les coeurs et vous donne les mots justes !\n\n"${v.txt}" (${v.ref})\n\nQue Dieu vous bénisse et vous accompagne.\n\nFraternellement,\nCommission Témoignage — EEAM Fès`;
 
     await queueCommunication(`${f.id}_${dateCible}_action_comm`, {
       type: 'action_prevue', evId: ev.id, evNom: ev.nom, evEmail: ev.email || null,
