@@ -5,8 +5,14 @@
    L'app reste "live" via Firebase (temps réel) dès que le
    réseau revient — ce SW ne met en cache que la coquille
    statique (HTML/icônes), jamais les données des fiches.
+
+   MISE À JOUR (façon applis modernes) : la nouvelle version
+   est téléchargée en arrière-plan mais n'ACTIVE PAS toute
+   seule — elle attend que la personne clique "Mettre à jour"
+   dans la bannière affichée par index.html. Ça évite un
+   rechargement surprise en pleine saisie d'un compte-rendu.
 ══════════════════════════════════════════════════════════ */
-const CACHE_NAME = 'eeam-temoignage-shell-v1';
+const CACHE_NAME = 'eeam-temoignage-shell-v2';
 const SHELL_FILES = [
   './index.html',
   './manifest.json',
@@ -18,7 +24,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES))
   );
-  self.skipWaiting();
+  // Pas de self.skipWaiting() ici — la nouvelle version reste "en attente"
+  // tant que la personne n'a pas cliqué "Mettre à jour" dans l'app.
 });
 
 self.addEventListener('activate', (event) => {
@@ -30,16 +37,21 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Stratégie : réseau d'abord (données à jour), cache en secours (hors-ligne)
+// Reçoit l'ordre d'activation quand la personne clique "Mettre à jour"
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 /* ══════════════════════════════════════════════════════════
-   NOTIFICATIONS PUSH (Web Push — VERSION TEST)
+   NOTIFICATIONS PUSH (Web Push)
    Reçoit les notifications envoyées par le script d'automation
    même si l'app est fermée.
 ══════════════════════════════════════════════════════════ */
 self.addEventListener('push', (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch(e) { data = { title: 'Commission Témoignage', body: event.data ? event.data.text() : '' }; }
-
   const title = data.title || 'Commission Témoignage — EEAM Fès';
   const options = {
     body: data.body || '',
@@ -48,7 +60,6 @@ self.addEventListener('push', (event) => {
     vibrate: [100, 50, 100],
     data: { url: data.url || './' }
   };
-
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
@@ -65,11 +76,11 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+// Stratégie : réseau d'abord (données à jour), cache en secours (hors-ligne)
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   // On ne touche jamais aux appels Firebase / EmailJS / API externes
   if (!event.request.url.includes(self.location.origin)) return;
-
   event.respondWith(
     fetch(event.request)
       .then((res) => {
