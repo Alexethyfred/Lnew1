@@ -2018,7 +2018,7 @@ body .animate, body .spinner, body [class*="anim"] {
     <div class="tabcontent" id="tab-communications">
       <div class="card" style="padding:18px;margin-bottom:14px;border:1.5px solid var(--c1);">
         <div class="chart-title" style="margin-bottom:4px;">✍️ Nouveau message manuel</div>
-        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Envoyez ce que vous voulez, à qui vous voulez, autant de fois que nécessaire — sans attendre un rappel automatique.</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Envoyez ce que vous voulez, à qui vous voulez, aussi souvent que nécessaire, sans attendre un rappel automatique.</div>
         <div class="edit-field"><label>Destinataire</label>
           <select id="comm-manuel-dest" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
             <option value="__tous__">👥 Tous les évangélistes actifs</option>
@@ -2164,7 +2164,7 @@ body .animate, body .spinner, body [class*="anim"] {
       <div id="relance-wrap" style="display:none;margin-bottom:18px;">
         <div class="card" style="padding:18px;">
           <div class="chart-title" style="margin-bottom:4px;">🔔 À relancer personnellement</div>
-          <p style="font-size:12px;color:var(--mu);margin-bottom:14px;line-height:1.5;">Évangélistes sans activité enregistrée depuis un moment — un mot de votre part fait souvent plus qu'un rappel automatique.</p>
+          <p style="font-size:12px;color:var(--mu);margin-bottom:14px;line-height:1.5;">Évangélistes sans activité enregistrée depuis un moment. Un mot de votre part fait souvent plus qu'un rappel automatique.</p>
           <div id="relance-list"></div>
         </div>
       </div>
@@ -4973,7 +4973,7 @@ function renderZoneChips() {
         <button onclick="saveZoneQuartiers('${escQ(z.nom)}','${escQ(z.id||'')}',${i})"
           style="padding:5px 10px;border-radius:7px;border:1px solid var(--bo);background:var(--c1);color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">💾 Sauv.</button>
       </div>
-      <div style="font-size:10px;color:var(--mu);margin-top:3px;">Séparez les quartiers par des virgules — la correspondance est insensible aux majuscules et accents.</div>
+      <div style="font-size:10px;color:var(--mu);margin-top:3px;">Séparez les quartiers par des virgules (la correspondance ignore majuscules et accents).</div>
       ` : ''}
     </div>`;
   }).join('');
@@ -6734,7 +6734,7 @@ function renderEquipes() {
       <button onclick="toggleZonesManager()" id="zones-manager-toggle" style="background:none;border:none;font-size:12px;color:var(--mu);cursor:pointer;font-weight:600;">Gérer ▾</button>
     </div>
     <div id="zones-manager-body" style="display:none;padding:14px;">
-      <div style="font-size:12px;color:var(--mu);margin-bottom:10px;">Zones actuelles — définissez les quartiers couverts par chaque zone. Un évangéliste est assigné à une zone dans son profil.</div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:10px;">Zones actuelles : définissez les quartiers couverts par chaque zone. Un évangéliste est assigné à une zone dans son profil.</div>
       <div id="zones-list-manage" style="margin-bottom:12px;"></div>
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mu);margin-bottom:6px;">Nouvelle zone</div>
       <div style="display:flex;gap:8px;margin-bottom:6px;">
@@ -6743,7 +6743,7 @@ function renderEquipes() {
         <button onclick="addZone()" class="btn btn-primary btn-sm">+ Ajouter</button>
       </div>
       <input type="text" id="new-zone-quartiers" placeholder="Quartiers couverts (ex: Uvillage, Sebaa Rouadi, Atlas…)" style="width:100%;background:var(--bg2);border:1.5px solid var(--bo);border-radius:8px;padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
-      <div style="font-size:10px;color:var(--mu);margin-top:3px;">Séparation par virgule — insensible aux majuscules/accents</div>
+      <div style="font-size:10px;color:var(--mu);margin-top:3px;">Séparation par virgule, insensible aux majuscules/accents</div>
     </div>
   </div>`;
 
@@ -7659,22 +7659,22 @@ async function checkRappelHebdoContact() {
   const contenu = mesFiches.length ?
 `Bonjour ${ev.nom},
 
-Belle semaine à vous ! 🙏 Voici votre point hebdomadaire de la Commission Témoignage :
+Belle semaine à vous ! 🙏 Voici votre point hebdomadaire.
 
-📋 Vos fiches à contacter d'ici lundi (${mesFiches.length}) :
+📋 Fiches à contacter d'ici lundi (${mesFiches.length}) :
 ${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
 
 📊 Cette semaine : ${nbVisites} visite(s) effectuée(s), ${nbAppelsMsg} appel(s)/message(s) envoyé(s). Merci pour votre engagement fidèle !
 
-« ${v.txt} » — ${v.ref}
+« ${v.txt} » (${v.ref})
 
 Fraternellement,
 Commission Témoignage — EEAM Fès` :
 `Bonjour ${ev.nom},
 
-Belle semaine à vous ! 🙏 Petit rappel bi-mensuel de la Commission Témoignage : pensez à prendre des nouvelles des personnes que vous suivez d'ici lundi.
+Belle semaine à vous ! 🙏 Petit rappel : pensez à prendre des nouvelles des personnes que vous suivez d'ici lundi.
 
-« ${v.txt} » — ${v.ref}
+« ${v.txt} » (${v.ref})
 
 Fraternellement,
 Commission Témoignage — EEAM Fès`;
@@ -7737,7 +7737,7 @@ ${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
 
 👥 Accompagnateur(s) suggéré(s) : ${nomsCollegues}
 
-« ${v.txt} » — ${v.ref}
+« ${v.txt} » (${v.ref})
 
 Fraternellement,
 Commission Témoignage — EEAM Fès`;
