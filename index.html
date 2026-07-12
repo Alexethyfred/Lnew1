@@ -3125,24 +3125,51 @@ if (!navigator.onLine) document.getElementById('offbar').classList.add('show');
 ════════════════════════════════════════════════ */
 function _esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-/* ── AIDE / GUIDE D'UTILISATION ── */
+/* ── AIDE / GUIDE D'UTILISATION ──
+   Chaque rôle ne voit que son propre guide — l'évangéliste n'a pas
+   accès aux explications du dashboard responsable, et inversement. ── */
 function ouvrirAide(volet) {
-  switchAideTab(volet || 'ev');
+  const evC = document.getElementById('aide-contenu-ev');
+  const respC = document.getElementById('aide-contenu-resp');
+  const titre = document.getElementById('aide-titre-role');
+  if (volet === 'resp') {
+    if (respC) respC.style.display = 'block';
+    if (evC) evC.style.display = 'none';
+    if (titre) titre.textContent = '🗂️ Guide responsable';
+  } else {
+    if (evC) evC.style.display = 'block';
+    if (respC) respC.style.display = 'none';
+    if (titre) titre.textContent = '👤 Guide évangéliste';
+  }
+  const champRecherche = document.getElementById('aide-recherche');
+  if (champRecherche) champRecherche.value = '';
+  rechercherDansAide();
   const modal = document.getElementById('modal-aide');
   if (modal) modal.style.display = 'flex';
 }
-function switchAideTab(volet) {
-  const evBtn = document.getElementById('aide-tab-ev-btn');
-  const respBtn = document.getElementById('aide-tab-resp-btn');
-  const evC = document.getElementById('aide-contenu-ev');
-  const respC = document.getElementById('aide-contenu-resp');
-  if (volet === 'resp') {
-    evBtn?.classList.remove('on'); respBtn?.classList.add('on');
-    if (evC) evC.style.display = 'none'; if (respC) respC.style.display = 'block';
-  } else {
-    respBtn?.classList.remove('on'); evBtn?.classList.add('on');
-    if (respC) respC.style.display = 'none'; if (evC) evC.style.display = 'block';
-  }
+
+/* ── RECHERCHE DANS LE GUIDE ──
+   Pas une vraie IA (ça demanderait un serveur et une clé payante),
+   mais une recherche par mots-clés qui couvre le même besoin concret :
+   trouver rapidement la bonne réponse sans tout lire. ── */
+function rechercherDansAide() {
+  const q = (document.getElementById('aide-recherche')?.value || '').toLowerCase().trim();
+  const conteneurVisible = document.getElementById('aide-contenu-ev').style.display !== 'none'
+    ? document.getElementById('aide-contenu-ev')
+    : document.getElementById('aide-contenu-resp');
+  const sections = conteneurVisible.querySelectorAll('.aide-section');
+  let nbVisibles = 0;
+
+  sections.forEach(section => {
+    const texte = section.innerText.toLowerCase();
+    const motsClefs = q.split(/\s+/).filter(Boolean);
+    const correspond = !q || motsClefs.every(mot => texte.includes(mot));
+    section.style.display = correspond ? 'block' : 'none';
+    if (correspond) nbVisibles++;
+  });
+
+  const videMsg = document.getElementById('aide-recherche-vide');
+  if (videMsg) videMsg.style.display = (q && nbVisibles === 0) ? 'block' : 'none';
 }
 
 function toast(msg, dur = 3000) {
@@ -11955,113 +11982,146 @@ if (_origInitDash) {
       <div class="modal-title">❓ Guide d'utilisation</div>
       <button class="modal-close" onclick="closeModal('modal-aide')">✕</button>
     </div>
-    <div style="display:flex;gap:8px;padding:0 20px;border-bottom:1px solid var(--bo);">
-      <button class="tbtn-period on" id="aide-tab-ev-btn" onclick="switchAideTab('ev')" style="border-radius:8px 8px 0 0;">👤 Évangéliste</button>
-      <button class="tbtn-period" id="aide-tab-resp-btn" onclick="switchAideTab('resp')" style="border-radius:8px 8px 0 0;">🗂️ Responsable</button>
+    <div style="padding:10px 20px 12px;border-bottom:1px solid var(--bo);">
+      <div style="font-size:12px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;" id="aide-titre-role"></div>
+      <div style="position:relative;">
+        <input type="text" id="aide-recherche" oninput="rechercherDansAide()" placeholder="🔍 Posez votre question (ex: comment annuler une action)" style="width:100%;padding:9px 40px 9px 12px;border-radius:8px;border:1.5px solid var(--bo);background:var(--surface);color:var(--tx);font-size:13px;outline:none;">
+        <button type="button" class="btn-mic" id="aide-recherche-mic" onclick="toggleDictee('aide-recherche','aide-recherche-mic')" title="Poser la question à la voix" style="position:absolute;right:5px;top:50%;transform:translateY(-50%);width:30px;height:30px;">🎤</button>
+      </div>
+      <div id="aide-recherche-vide" style="display:none;font-size:12.5px;color:var(--mu);margin-top:8px;">Aucun résultat. Essayez d'autres mots, ou parcourez les sections ci-dessous.</div>
     </div>
     <div class="modal-body" style="overflow-y:auto;flex:1;">
 
       <div id="aide-contenu-ev">
         <div class="aide-section">
           <div class="aide-titre">📂 Mes fiches</div>
-          <p>Vos fiches sont classées automatiquement : <strong>En retard</strong> (une action était prévue et n'a pas eu lieu), <strong>À faire aujourd'hui</strong>, <strong>Nouveaux à contacter</strong> et <strong>Autres</strong>. Vous n'avez pas besoin de trier vous-même.</p>
-          <p><strong>🕒 Récemment consultées</strong>, en haut de la liste, vous permet de reprendre une fiche que vous venez de regarder.</p>
-          <p>La recherche accepte aussi la voix : appuyez sur 🎤 et parlez.</p>
+          <p>C'est l'écran principal. Vos fiches sont classées toutes seules en quatre groupes : <strong>En retard</strong> (une action était prévue et la date est passée), <strong>À faire aujourd'hui</strong>, <strong>Nouveaux à contacter</strong> (jamais encore approchés) et <strong>Autres</strong>. Vous n'avez rien à trier vous-même, l'app le fait à chaque ouverture.</p>
+          <p>En haut de la liste, une bande <strong>🕒 Récemment consultées</strong> affiche les dernières fiches que vous avez ouvertes. Un tap dessus rouvre directement la fiche, sans avoir à la rechercher.</p>
+          <p>La barre de recherche accepte le texte comme d'habitude, et aussi la voix : tapez sur le micro 🎤 à côté et dites le nom de la personne.</p>
+          <p>Un tap sur une fiche l'ouvre en entier : coordonnées, historique des contacts précédents, et le formulaire de compte-rendu.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">📞 Contact rapide</div>
-          <p>Sur chaque fiche, deux boutons : <strong>📞 Appelé</strong> et <strong>🚶 Visité</strong>. Un tap suffit pour enregistrer le contact. Vous avez 5 secondes pour annuler si c'est une erreur, avec le bouton "↩️ Annuler" en bas de l'écran.</p>
+          <p>Sur chaque fiche, deux boutons directs : <strong>📞 Appelé</strong> et <strong>🚶 Visité</strong>. Un tap suffit pour enregistrer que le contact a eu lieu, sans ouvrir de formulaire. Un texte de compte-rendu générique est ajouté automatiquement (par exemple "Appel effectué").</p>
+          <p>Après le tap, une barre apparaît en bas de l'écran pendant 5 secondes avec un bouton <strong>"↩️ Annuler"</strong>. Si vous avez tapé par erreur, c'est le moment de revenir en arrière ; passé ce délai, le contact est enregistré pour de bon.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">📝 Compte-rendu détaillé</div>
-          <p>Ouvrez une fiche pour écrire un compte-rendu plus complet. Le champ n'est <strong>pas obligatoire</strong> : si vous le laissez vide, un texte par défaut est utilisé. Vous pouvez aussi <strong>dicter</strong> avec le micro 🎤 au lieu de taper.</p>
-          <p>Si l'app se ferme pendant que vous écrivez, votre texte n'est pas perdu. Il est sauvegardé automatiquement et réapparaît à la réouverture.</p>
+          <p>Ouvrez une fiche pour accéder au formulaire complet : type de contact (appel, visite, message), date, durée, et un champ de texte libre pour raconter l'échange.</p>
+          <p>Ce champ n'est <strong>pas obligatoire</strong>. Si vous le laissez vide, un texte par défaut selon le type de contact est utilisé à sa place, pour ne jamais bloquer l'enregistrement.</p>
+          <p>Vous pouvez taper le compte-rendu ou le <strong>dicter</strong> : appuyez sur le micro 🎤 à côté du champ, parlez normalement, le texte apparaît tout seul.</p>
+          <p>Si l'app se ferme pendant que vous écrivez (appel entrant, batterie, fermeture accidentelle), rien n'est perdu : le texte est sauvegardé automatiquement au fil de la frappe et réapparaît quand vous rouvrez la fiche.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">📅 Prochaine action</div>
-          <p>Dans le formulaire de compte-rendu, deux boutons de suggestion : <strong>"Dans 2 sem. (à recontacter)"</strong> et <strong>"Dans 1 mois (à revisiter)"</strong>. Ils remplissent la date automatiquement, mais vous pouvez toujours choisir votre propre date.</p>
-          <p>Pour modifier ou annuler une action déjà programmée, tapez directement sur le badge ⚡ affiché sur la fiche, avec l'icône ✏️.</p>
+          <p>Dans le formulaire de compte-rendu, deux champs permettent de programmer une suite : un texte libre ("Rappeler", "Inviter au culte"...) et une date. Une liste de suggestions apparaît pendant la saisie du texte pour aller plus vite.</p>
+          <p>Deux boutons remplissent ces champs automatiquement : <strong>"Dans 2 sem. (à recontacter)"</strong> et <strong>"Dans 1 mois (à revisiter)"</strong>. Vous pouvez aussi ignorer ces suggestions et choisir votre propre date.</p>
+          <p>Une fois une action programmée, elle apparaît sur la fiche sous forme d'un badge ⚡ avec l'icône ✏️. Un tap dessus permet de la modifier ou de l'annuler directement, sans repasser par tout le formulaire de compte-rendu.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">💬 Message groupé WhatsApp</div>
-          <p>Dans "Mes fiches", bouton <strong>"☑️ Message groupé WhatsApp"</strong> : cochez plusieurs fiches, écrivez votre message une seule fois (utilisez <code>{prenom}</code> pour qu'il soit personnalisé), puis WhatsApp s'ouvre pour chaque contact l'un après l'autre. WhatsApp ne permet malheureusement pas l'envoi groupé automatique, c'est une vraie limite de la plateforme, pas de l'app.</p>
+          <p>Dans "Mes fiches", bouton <strong>"☑️ Message groupé WhatsApp"</strong> : des cases à cocher apparaissent sur chaque fiche. Cochez celles que vous voulez contacter, puis "Écrire le message".</p>
+          <p>Écrivez votre texte une seule fois. Le mot <code>{prenom}</code> est remplacé automatiquement par le prénom de chaque personne. WhatsApp s'ouvre ensuite pour le premier contact, message déjà prêt ; vous cliquez "Envoyé, suivant" et l'app passe au contact suivant, jusqu'à la fin de la liste.</p>
+          <p>WhatsApp ne permet pas d'envoi groupé automatique à plusieurs numéros en un clic, c'est une limite de la plateforme elle-même. Ce système reste le plus rapide possible dans ce cadre : le message n'est écrit qu'une fois.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">📞 Mes activités & 📅 Agenda</div>
-          <p>"Mes activités" propose un formulaire complet si vous préférez choisir la fiche dans une liste plutôt que de la chercher. "Agenda" donne une vue d'ensemble (retards, cette semaine, plus tard) avec les mêmes boutons rapides.</p>
+          <div class="aide-titre">📞 Mes activités</div>
+          <p>Un formulaire alternatif si vous préférez choisir la fiche dans une liste déroulante plutôt que de la chercher dans "Mes fiches". Utile pour enregistrer un contact fait en dehors de l'app (par exemple après un appel reçu sans avoir l'app sous les yeux). L'historique de vos activités passées est aussi visible ici.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">📅 Agenda</div>
+          <p>Vue d'ensemble par période : en retard, aujourd'hui, cette semaine, plus tard. Chaque ligne a les mêmes boutons rapides 📞/🚶 que "Mes fiches", donc voir une échéance et agir dessus se fait au même endroit, sans changer d'écran.</p>
+          <p>C'est aussi ici que vous indiquez votre disponibilité pour accompagner une visite mensuelle d'un autre évangéliste.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">🚌 Sorties collectives</div>
-          <p>Quand une sortie est publiée, vous êtes notifié(e) et pouvez répondre "Je viens" ou "Je ne peux pas" directement. Un compte-rendu peut être ajouté après.</p>
+          <p>Quand la responsable publie une sortie, vous recevez une invitation. Répondez "Je viens" ou "Je ne peux pas" directement depuis l'app. Après la sortie, un compte-rendu peut être ajouté (contacts rencontrés, remarques).</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">👥 Contacts</div>
-          <p>Retrouvez les autres évangélistes de l'équipe pour les appeler ou leur écrire sur WhatsApp en un clic.</p>
+          <p>La liste de tous les évangélistes actifs de la commission, avec un bouton pour appeler ou écrire sur WhatsApp en un clic, sans avoir à chercher le numéro ailleurs.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">🔔 Notifications</div>
-          <p>Une cloche interne à l'app vous prévient d'un rappel ou d'une action de la responsable. Si vous avez autorisé les notifications sur votre téléphone, une bannière peut aussi apparaître. Cela fonctionne mieux si l'app est <strong>installée</strong> (voir ci-dessous), surtout sur iPhone.</p>
+          <p>Une cloche interne à l'app vous prévient d'un rappel ou d'une action de la responsable, visible dès l'ouverture. Si vous avez autorisé les notifications sur votre téléphone, une bannière peut aussi s'afficher même app fermée. Ça fonctionne mieux une fois l'app installée (voir plus bas), surtout sur iPhone.</p>
+          <p>Un petit chiffre rouge peut aussi apparaître directement sur l'icône de l'app, sur l'écran d'accueil du téléphone, indiquant combien de fiches sont en retard, sans même avoir besoin d'ouvrir l'app.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">📲 Installer l'application</div>
-          <p>Bouton 📲 en haut de l'écran : l'app s'installe comme une vraie application, avec une icône sur votre écran d'accueil. Elle devient plus rapide et les notifications fonctionnent mieux.</p>
+          <p>Bouton 📲 en haut de l'écran : l'app s'installe comme une vraie application, avec une icône sur l'écran d'accueil du téléphone. Elle s'ouvre plus vite et les notifications fonctionnent mieux, surtout sur iPhone où c'est indispensable pour les recevoir.</p>
+          <p>Quand une mise à jour est disponible, une bannière apparaît en haut de l'écran avec un bouton "Mettre à jour" : vous choisissez le moment, l'app ne se recharge jamais toute seule en pleine saisie.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">🌙 Mode sombre & autres réglages</div>
+          <p>Le bouton 🌙 en haut bascule entre affichage clair et sombre. Vos réglages restent mémorisés d'une session à l'autre.</p>
         </div>
       </div>
 
       <div id="aide-contenu-resp" style="display:none;">
         <div class="aide-section">
           <div class="aide-titre">📂 Fiches</div>
-          <p>Vue de toutes les fiches de la commission. Filtres disponibles : statut de suivi, évangéliste, zone, école, statut église, et <strong>"⚠️ Infos manquantes"</strong> pour repérer les fiches incomplètes (téléphone, nationalité, quartier, sexe ou évangéliste non renseigné).</p>
+          <p>Vue de toutes les fiches de la commission, tous évangélistes confondus. Un tap sur une fiche l'ouvre en entier : coordonnées, évangéliste assigné, historique complet des contacts, observations.</p>
+          <p>Filtres disponibles en haut : statut de suivi, évangéliste, zone, école, statut église. Le filtre <strong>"⚠️ Infos manquantes"</strong> repère d'un coup les fiches où il manque téléphone, nationalité, quartier, sexe ou évangéliste assigné, utile pour compléter la base au fil du temps.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">📊 Analytics</div>
-          <p>Statistiques globales et par évangéliste (fiches, visites, activités, retards), présentées par ordre alphabétique, sans classement ni comparaison entre personnes.</p>
+          <p>Statistiques globales de la commission : nombre de fiches, visites, activités par période. Le détail par évangéliste est présenté par ordre alphabétique, volontairement sans classement ni comparaison entre personnes.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">📞 Suivi</div>
-          <p>Barre de progression par évangéliste (fiches visitées / total) et liste des retards. Un formulaire rapide permet aussi d'enregistrer une activité vous-même si besoin.</p>
+          <p>Une barre de progression par évangéliste (fiches visitées sur total assigné) et la liste des retards en cours. Un formulaire rapide permet aussi d'enregistrer vous-même une activité si besoin, avec les mêmes suggestions de prochaine action que côté évangéliste.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">🗺️ Équipes</div>
-          <p>Zones et carte de répartition géographique des évangélistes.</p>
+          <p>Gestion des zones géographiques et carte de répartition des évangélistes sur Fès. Chaque évangéliste est rattaché à une zone dans son profil.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">🚌 Sorties</div>
-          <p>Créez une sortie collective (lieu, date, description) : elle est automatiquement diffusée à tous les évangélistes via Communications (voir ci-dessous). Un filtre "À venir / Historique" sépare les sorties passées.</p>
+          <p>Créez une sortie collective (lieu, date, description) : l'invitation part automatiquement vers Communications pour chaque évangéliste actif. Un filtre "À venir / Historique" sépare les sorties déjà passées. Les comptes-rendus ajoutés par les évangélistes sont consultables ici.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">📬 Communications</div>
-          <p>Tous les rappels (hebdomadaire, visite mensuelle, action prévue 48h avant, sortie collective) arrivent ici <strong>par évangéliste</strong>, en attente. Rien ne part automatiquement : vous validez ou modifiez le texte, puis cliquez séparément sur <strong>"Envoyer l'email"</strong> et <strong>"Envoyer la notification"</strong>. Vous pouvez aussi composer un message libre, à un ou plusieurs évangélistes. L'historique garde une trace, avec la possibilité de renvoyer (🔁) ou de supprimer définitivement (🗑️).</p>
-          <p>La notification "cloche" part immédiatement. La bannière sur le téléphone part au passage suivant du script automatique, quelques minutes plus tard, car elle nécessite une clé technique que seul le serveur possède.</p>
+          <p>C'est le centre d'envoi de tous les rappels : hebdomadaire, visite mensuelle, action prévue (48h avant une date programmée), et sortie collective. Chaque rappel arrive ici <strong>par évangéliste</strong>, en attente de validation.</p>
+          <p>Rien ne part automatiquement. Vous lisez le texte, le modifiez si besoin, puis cliquez séparément sur <strong>"Envoyer l'email"</strong> et <strong>"Envoyer la notification"</strong> : les deux canaux sont indépendants, vous pouvez envoyer l'un sans l'autre.</p>
+          <p>La notification "cloche" arrive immédiatement dans l'app de l'évangéliste. La bannière sur son téléphone, elle, part au passage suivant du script automatique (habituellement quelques minutes), car elle a besoin d'une clé technique que seul le serveur possède, pas le navigateur.</p>
+          <p>Vous pouvez aussi composer un <strong>message manuel libre</strong>, à un évangéliste précis ou à tous les actifs d'un coup, sans attendre un rappel automatique.</p>
+          <p>Une fois traitée, chaque communication passe dans l'<strong>historique</strong>, où vous pouvez la renvoyer (🔁, elle repart en file d'attente modifiable) ou la supprimer définitivement (🗑️). La sélection multiple permet de supprimer plusieurs entrées d'un coup.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">👥 Évangélistes</div>
-          <p>Gestion des comptes évangélistes (ajout, modification, désactivation).</p>
+          <p>Ajout, modification et désactivation des comptes évangélistes. Un évangéliste désactivé disparaît de cette liste et des sélecteurs, mais ses fiches et son historique restent conservés.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">📇 Contacts équipe</div>
-          <p>Contactez n'importe quel évangéliste par appel ou WhatsApp. Le bloc <strong>"🔔 À relancer personnellement"</strong> liste ceux sans activité depuis 7 jours ou plus. Un rappel humain de votre part est souvent plus efficace qu'une notification automatique.</p>
+          <p>Appelez ou écrivez sur WhatsApp n'importe quel évangéliste en un clic. Le bloc <strong>"🔔 À relancer personnellement"</strong> liste ceux sans activité enregistrée depuis 7 jours ou plus, triés du plus inactif au moins. Un message de relance pré-rempli s'ouvre directement sur WhatsApp : un rappel humain de votre part est souvent plus efficace qu'une notification automatique de plus.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">📧 Rapports</div>
-          <p>Rapports hebdomadaire, mensuel et annuel envoyés par email, au format détaillé ou résumé, déclenchés manuellement par vous.</p>
+          <p>Rapports hebdomadaire, mensuel et annuel envoyés par email à l'adresse de votre choix, au format détaillé ou résumé. Le déclenchement est toujours manuel, jamais automatique.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">🔐 Sécurité & réglages</div>
+          <p>Le bouton 🔐 en haut permet de changer le mot de passe responsable. Le bouton 📋 ouvre le formulaire public d'accueil (utilisable pour créer une fiche sur place, par exemple lors d'un accueil au culte). Le bouton 🌙 bascule l'affichage clair/sombre.</p>
         </div>
       </div>
 
