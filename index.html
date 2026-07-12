@@ -5800,10 +5800,7 @@ function renderEvFicheCard(f) {
       + '</div>'
     : '';
 
-  const quickBtns = '<div style="display:flex;gap:7px;margin-top:7px;" onclick="event.stopPropagation()">'
-    + '<button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity(\'' + f.id + '\',\'appel\',event)">📞 Appelé</button>'
-    + '<button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity(\'' + f.id + '\',\'visite\',event)">🚶 Visité</button>'
-    + '</div>';
+  const quickBtns = '';
 
   const selectionMode = _selectionModeActif;
   const estSelectionnee = _fichesSelectionnees.has(f.id);
@@ -7893,10 +7890,6 @@ function renderEvAgenda() {
             </div>
             <div style="font-size:11px;color:${groupColor};font-weight:600;">${late ? `${diffAbs}j de retard` : isToday ? "Aujourd'hui !" : `${dateFmt}`}</div>
             ${lastActHtml}
-            <div style="display:flex;gap:6px;margin-top:8px;" onclick="event.stopPropagation()">
-              <button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity('${f.id}','appel',event)">📞 Appelé</button>
-              <button class="btn btn-outline btn-sm" style="flex:1;" onclick="quickLogActivity('${f.id}','visite',event)">🚶 Visité</button>
-            </div>
           </div>
 
         </div>
@@ -11938,11 +11931,6 @@ if (_origInitDash) {
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">📞 Contact rapide</div>
-          <p>Sur chaque fiche, deux boutons directs : <strong>📞 Appelé</strong> et <strong>🚶 Visité</strong>. Un tap suffit pour enregistrer que le contact a eu lieu, sans ouvrir de formulaire. Un texte de compte-rendu générique est ajouté automatiquement (par exemple "Appel effectué").</p>
-        </div>
-
-        <div class="aide-section">
           <div class="aide-titre">📝 Compte-rendu détaillé</div>
           <p>Ouvrez une fiche pour accéder au formulaire complet : type de contact (appel, visite, message), date, durée, et un champ de texte libre pour raconter l'échange.</p>
           <p>Ce champ n'est <strong>pas obligatoire</strong>. Si vous le laissez vide, un texte par défaut selon le type de contact est utilisé à sa place, pour ne jamais bloquer l'enregistrement.</p>
@@ -11971,7 +11959,7 @@ if (_origInitDash) {
 
         <div class="aide-section">
           <div class="aide-titre">📅 Agenda</div>
-          <p>Vue d'ensemble par période : en retard, aujourd'hui, cette semaine, plus tard. Chaque ligne a les mêmes boutons rapides 📞/🚶 que "Mes fiches", donc voir une échéance et agir dessus se fait au même endroit, sans changer d'écran.</p>
+          <p>Vue d'ensemble par période : en retard, aujourd'hui, cette semaine, plus tard. Un tap sur une échéance ouvre la fiche pour y enregistrer le compte-rendu.</p>
           <p>C'est aussi ici que vous indiquez votre disponibilité pour accompagner une visite mensuelle d'un autre évangéliste.</p>
         </div>
 
