@@ -998,6 +998,11 @@ body {
 
 /* ── MODAL LARGE ───────────────────────────────────── */
 .modal-lg { max-width: 700px; }
+.aide-section { margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--bo); }
+.aide-section:last-child { border-bottom: none; }
+.aide-titre { font-size: 14px; font-weight: 800; color: var(--c1); margin-bottom: 6px; }
+.aide-section p { font-size: 13px; color: var(--tx); line-height: 1.6; margin-bottom: 6px; }
+.aide-section code { background: var(--bg2); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
 
 /* ── TABS DANS MODAL ───────────────────────────────── */
 .modal-tabs { display: flex; border-bottom: 1.5px solid var(--bo); margin-bottom: 16px; }
@@ -1455,7 +1460,7 @@ body .animate, body .spinner, body [class*="anim"] {
           </div>
           <div class="field" id="fi-tel">
             <label id="l-tel">Téléphone <span class="req">*</span></label>
-            <input type="tel" id="f-tel" placeholder="+212 6xx xxx xxx" autocomplete="tel">
+            <input type="tel" inputmode="tel" id="f-tel" placeholder="+212 6xx xxx xxx" autocomplete="tel">
             <div class="field-err">Champ requis</div>
           </div>
         </div>
@@ -1615,6 +1620,7 @@ body .animate, body .spinner, body [class*="anim"] {
       <button class="tbtn" id="dark-toggle-resp" onclick="toggleDarkMode()" title="Mode sombre">🌙</button>
       <button class="tbtn" onclick="showScreen('form')">📋 Formulaire</button>
       <button class="tbtn" onclick="openModal('modal-chg-pwd')" title="Changer le mot de passe">🔐</button>
+      <button class="tbtn" onclick="ouvrirAide('resp')" title="Aide">❓</button>
       <button class="tbtn red" onclick="doLogout()">Déco</button>
     </div>
   </div>
@@ -2091,7 +2097,7 @@ body .animate, body .spinner, body [class*="anim"] {
           <div style="padding:16px 18px;">
             <div class="grid2">
               <div class="field"><label>Nom complet <span class="req">*</span></label><input type="text" id="new-ev-nom" placeholder="Nom Prénom"></div>
-              <div class="field"><label>N° WhatsApp <span class="req">*</span></label><input type="tel" id="new-ev-tel" placeholder="+212 6xx xxx xxx"></div>
+              <div class="field"><label>N° WhatsApp <span class="req">*</span></label><input type="tel" inputmode="tel" id="new-ev-tel" placeholder="+212 6xx xxx xxx"></div>
             </div>
             <div class="grid2">
               <div class="field"><label>Code unique <span class="req">*</span></label><input type="text" id="new-ev-code" placeholder="EV001" style="text-transform:uppercase;letter-spacing:.1em;"></div>
@@ -2189,7 +2195,7 @@ body .animate, body .spinner, body [class*="anim"] {
     <div class="modal-body">
       <div class="edit-field-row">
         <div class="edit-field"><label>Nom complet</label><input type="text" id="ee-nom" placeholder="Nom Prénom"></div>
-        <div class="edit-field"><label>N° WhatsApp</label><input type="tel" id="ee-tel" placeholder="+212 6xx xxx xxx"></div>
+        <div class="edit-field"><label>N° WhatsApp</label><input type="tel" inputmode="tel" id="ee-tel" placeholder="+212 6xx xxx xxx"></div>
       </div>
       <div class="edit-field-row">
         <div class="edit-field"><label>Nationalité</label><input type="text" id="ee-nat" placeholder="ex: Ivoirienne"></div>
@@ -2326,12 +2332,15 @@ body .animate, body .spinner, body [class*="anim"] {
      ÉCRAN 4 : ESPACE ÉVANGÉLISTE
 ═══════════════════════════════════════════════════ -->
 <div id="screen-ev" class="screen">
+  <div id="ptr-indicator" style="display:none;position:sticky;top:0;left:0;right:0;text-align:center;padding:10px;font-size:12px;font-weight:700;color:var(--c1);background:var(--bg);z-index:50;">⏳ Actualisation…</div>
   <div class="topbar">
     <div class="topbar-brand">
       Mon Espace
       <small id="ev-topbar-nom">Évangéliste</small>
     </div>
     <div class="topbar-btns">
+      <button class="tbtn" id="ev-install-btn-perm" onclick="installPwa()" title="Installer l'application" style="display:none;">📲</button>
+      <button class="tbtn" onclick="ouvrirAide('ev')" title="Aide">❓</button>
       <button class="tbtn" id="dark-toggle-ev" onclick="toggleDarkMode()" title="Mode sombre">🌙</button>
       <button class="tbtn red" onclick="doLogout()">🚪 Déconnexion</button>
     </div>
@@ -2391,7 +2400,10 @@ body .animate, body .spinner, body [class*="anim"] {
         <div id="upcoming-list"></div>
       </div>
 
-      <input type="text" class="toolbar" style="width:100%;margin-bottom:10px;border-radius:10px;padding:10px 14px;font-size:13px;border:1.5px solid var(--bo);background:var(--surface);outline:none;" placeholder="🔍 Rechercher..." id="ev-fiche-search" oninput="renderEvFiches()">
+      <div style="position:relative;margin-bottom:10px;">
+        <input type="text" class="toolbar" style="width:100%;border-radius:10px;padding:10px 40px 10px 14px;font-size:13px;border:1.5px solid var(--bo);background:var(--surface);outline:none;" placeholder="🔍 Rechercher..." id="ev-fiche-search" oninput="renderEvFiches()">
+        <button type="button" class="btn-mic" id="ev-search-mic" onclick="toggleDictee('ev-fiche-search','ev-search-mic')" title="Rechercher par la voix" style="position:absolute;right:5px;top:50%;transform:translateY(-50%);width:30px;height:30px;">🎤</button>
+      </div>
 
       <button type="button" onclick="toggleModeSelection()" id="ev-btn-mode-selection" style="background:none;border:none;color:var(--c1);font-size:12.5px;font-weight:700;padding:4px 2px 12px;cursor:pointer;">
         ☑️ Message groupé WhatsApp
@@ -2420,7 +2432,7 @@ body .animate, body .spinner, body [class*="anim"] {
         </div>
         <textarea id="ev-act-note" placeholder="Compte-rendu (optionnel)" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:8px 10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical;min-height:60px;width:100%;margin-bottom:8px;color:var(--tx);"></textarea>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-          <input type="text" id="ev-act-next" placeholder="Prochaine action…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:8px 10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
+          <input type="text" id="ev-act-next" list="dl-actions" placeholder="Prochaine action…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:8px 10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
           <input type="date" id="ev-act-next-date" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:8px 10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
         </div>
         <button class="btn btn-primary btn-full btn-sm" onclick="saveEvQuickActivity()">💾 Enregistrer</button>
@@ -3113,6 +3125,26 @@ if (!navigator.onLine) document.getElementById('offbar').classList.add('show');
 ════════════════════════════════════════════════ */
 function _esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+/* ── AIDE / GUIDE D'UTILISATION ── */
+function ouvrirAide(volet) {
+  switchAideTab(volet || 'ev');
+  const modal = document.getElementById('modal-aide');
+  if (modal) modal.style.display = 'flex';
+}
+function switchAideTab(volet) {
+  const evBtn = document.getElementById('aide-tab-ev-btn');
+  const respBtn = document.getElementById('aide-tab-resp-btn');
+  const evC = document.getElementById('aide-contenu-ev');
+  const respC = document.getElementById('aide-contenu-resp');
+  if (volet === 'resp') {
+    evBtn?.classList.remove('on'); respBtn?.classList.add('on');
+    if (evC) evC.style.display = 'none'; if (respC) respC.style.display = 'block';
+  } else {
+    respBtn?.classList.remove('on'); evBtn?.classList.add('on');
+    if (respC) respC.style.display = 'none'; if (evC) evC.style.display = 'block';
+  }
+}
+
 function toast(msg, dur = 3000) {
   const t = document.getElementById('toast');
   // Détecter le type par l'emoji initial
@@ -3595,6 +3627,7 @@ function toggleDictee(textareaId, btnId) {
     for (let i = 0; i < e.results.length; i++) transcrit += e.results[i][0].transcript;
     const propre = _nettoyerTranscription(transcrit);
     textarea.value = baseTexte ? `${baseTexte} ${propre}` : propre;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
   };
   rec.onerror = (e) => {
     if (e.error !== 'no-speech' && e.error !== 'aborted') {
@@ -3616,6 +3649,52 @@ function toggleDictee(textareaId, btnId) {
 /* ── Suggestion "à recontacter" (+2 sem.) / "à revisiter" (+1 mois) ──
    Pré-remplit les 2 champs déjà existants du formulaire — la saisie
    manuelle reste toujours possible, rien n'est imposé. ── */
+/* ── INDICATEUR HORS LIGNE ──
+   La persistance offline Firestore existe déjà (enablePersistence plus
+   haut) — ceci ajoute juste la confirmation visuelle : sans elle,
+   quelqu'un sans réseau croirait que ses saisies échouent alors
+   qu'elles sont en fait mises en attente et partiront automatiquement. ── */
+function _majBanniereHorsLigne() {
+  const b = document.getElementById('offline-banner');
+  if (b) b.style.display = navigator.onLine ? 'none' : 'block';
+}
+window.addEventListener('online', _majBanniereHorsLigne);
+window.addEventListener('offline', _majBanniereHorsLigne);
+_majBanniereHorsLigne();
+
+/* ── PULL-TO-REFRESH (espace évangéliste uniquement) ──
+   Les données sont déjà en temps réel (Firestore), donc ce geste ne
+   "recharge" rien à proprement parler — il donne juste une confirmation
+   visuelle rassurante que tout est à jour, ce qui est le vrai besoin
+   pour quelqu'un qui doute d'avoir un réseau correct. ── */
+(function() {
+  let startY = 0, pulling = false;
+  const seuil = 70;
+  const screenEv = document.getElementById('screen-ev');
+  if (!screenEv) return;
+
+  screenEv.addEventListener('touchstart', (e) => {
+    if (window.scrollY <= 0) { startY = e.touches[0].clientY; pulling = true; }
+  }, { passive: true });
+
+  screenEv.addEventListener('touchmove', (e) => {
+    if (!pulling) return;
+    const delta = e.touches[0].clientY - startY;
+    const indic = document.getElementById('ptr-indicator');
+    if (delta > seuil && indic) indic.style.display = 'block';
+  }, { passive: true });
+
+  screenEv.addEventListener('touchend', () => {
+    if (!pulling) return;
+    pulling = false;
+    const indic = document.getElementById('ptr-indicator');
+    if (indic && indic.style.display === 'block') {
+      renderEvFiches(); renderEvAgenda(); updateEvStats(); showUpcoming();
+      setTimeout(() => { indic.style.display = 'none'; toast('✅ À jour'); }, 500);
+    }
+  });
+})();
+
 /* ── BADGE SUR L'ICÔNE DE L'APP (Badging API) ──
    Affiche le nombre de fiches en retard directement sur l'icône de
    l'app, sur l'écran d'accueil du téléphone — sans avoir besoin
@@ -3671,12 +3750,41 @@ async function modifierProchaineAction(ficheId, event) {
   }
 }
 
-async function quickLogActivity(ficheId, type, event) {
+let _dernierContactEnAttente = null;
+
+function quickLogActivity(ficheId, type, event) {
   if (event) event.stopPropagation();
   const fiche = (S.fiches || []).find(f => f.id === ficheId) || (S.myFiches || []).find(f => f.id === ficheId);
   if (!fiche) return;
-  const today = new Date().toISOString().split('T')[0];
   const noteDefaut = { appel: 'Appel effectué', visite: 'Visite effectuée', message: 'Message envoyé' }[type] || 'Contact effectué';
+
+  // Annule un précédent contact encore en attente (un seul à la fois)
+  if (_dernierContactEnAttente) { clearTimeout(_dernierContactEnAttente.timer); }
+
+  const bar = document.getElementById('undo-bar');
+  const msg = document.getElementById('undo-bar-msg');
+  if (msg) msg.textContent = `${noteDefaut} — ${fiche.nom}`;
+  if (bar) bar.style.display = 'flex';
+
+  const timer = setTimeout(() => _confirmerContactDiffere(ficheId, type, fiche, noteDefaut), 5000);
+  _dernierContactEnAttente = { timer, ficheId, type, fiche, noteDefaut };
+}
+
+function annulerDernierContact() {
+  if (_dernierContactEnAttente) {
+    clearTimeout(_dernierContactEnAttente.timer);
+    _dernierContactEnAttente = null;
+  }
+  const bar = document.getElementById('undo-bar');
+  if (bar) bar.style.display = 'none';
+  toast('↩️ Annulé');
+}
+
+async function _confirmerContactDiffere(ficheId, type, fiche, noteDefaut) {
+  const bar = document.getElementById('undo-bar');
+  if (bar) bar.style.display = 'none';
+  _dernierContactEnAttente = null;
+  const today = new Date().toISOString().split('T')[0];
 
   try {
     await window._saveActivity({
@@ -3697,7 +3805,7 @@ async function quickLogActivity(ficheId, type, event) {
         statut: 'visite', updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }).catch(() => {});
     }
-    toast(`✅ ${noteDefaut} — ${fiche.nom}`);
+    toast(`✅ ${noteDefaut} (${fiche.nom})`);
   } catch (e) {
     console.error(e);
     toast('❌ Erreur lors de l\'enregistrement');
@@ -3771,7 +3879,7 @@ function demarrerEnvoiGroupe() {
   _envoiGroupeEnvoyes = 0;
 
   const sansTel = _fichesSelectionnees.size - _envoiGroupeQueue.length;
-  if (sansTel > 0) toast(`⚠️ ${sansTel} fiche(s) ignorée(s) — pas de téléphone renseigné`);
+  if (sansTel > 0) toast(`⚠️ ${sansTel} fiche(s) ignorée(s), pas de téléphone renseigné`);
 
   if (!_envoiGroupeQueue.length) { toast('❌ Aucun contact avec téléphone dans la sélection'); return; }
 
@@ -4225,7 +4333,7 @@ function openFicheModal(id) {
       </div>
       <div class="edit-field-row">
         <div class="edit-field"><label>Date de la fiche</label><input type="date" id="ef-date" value="${(() => { const d = _ficheDate(f); return d ? d.toISOString().substring(0,10) : (f.timestamp||'').substring(0,10); })()}"></div>
-        <div class="edit-field"><label>Téléphone</label><input type="tel" id="ef-tel" value="${f.telephone||''}"></div>
+        <div class="edit-field"><label>Téléphone</label><input type="tel" inputmode="tel" id="ef-tel" value="${f.telephone||''}"></div>
       </div>
       <div class="edit-field-row">
         <div class="edit-field"><label>Nationalité</label><input type="text" id="ef-nat" value="${f.nationalite||''}"></div>
@@ -4557,7 +4665,7 @@ async function addEvangeliste() {
     });
     const sit=document.getElementById('new-ev-situation'); if(sit) sit.value='';
     const eq=document.getElementById('new-ev-equipe'); if(eq) eq.value='';
-    toast('✅ ' + nom + ' ajouté(e) — Code : ' + code);
+    toast('✅ ' + nom + ' ajouté(e), code : ' + code);
     // Fermer l'accordéon après succès
     const body = document.getElementById('ev-add-body');
     const arrow = document.getElementById('ev-add-arrow');
@@ -4965,7 +5073,7 @@ function showEvContact(evId) {
       window.open('tel:' + tel.replace(/\s/g, ''), '_self');
     }
   } else {
-    toast('👤 ' + ev.nom + ' — Pas de numéro enregistré');
+    toast('👤 ' + ev.nom + ' : pas de numéro enregistré');
   }
 }
 
@@ -5082,11 +5190,35 @@ function toggleEvFiche(id) {
   S.openEvFicheId = S.openEvFicheId === id ? null : id;
   renderEvFiches();
   if (S.openEvFicheId) {
+    _majFichesRecentes(id);
     setTimeout(() => {
       document.getElementById('efc-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       loadEvFicheHistory(id);
+      restaurerBrouillon(id);
     }, 120);
   }
+}
+
+/* ── BROUILLON AUTO — compte-rendu ──
+   Si l'app se ferme en plein milieu d'une saisie (appel entrant,
+   batterie, fermeture accidentelle), le texte tapé n'est pas perdu. ── */
+function sauvegarderBrouillon(ficheId) {
+  const champ = document.getElementById(`af-note-${ficheId}`);
+  if (!champ) return;
+  const val = champ.value.trim();
+  if (val) localStorage.setItem(`brouillon_cr_${ficheId}`, val);
+  else localStorage.removeItem(`brouillon_cr_${ficheId}`);
+}
+function restaurerBrouillon(ficheId) {
+  const champ = document.getElementById(`af-note-${ficheId}`);
+  const brouillon = localStorage.getItem(`brouillon_cr_${ficheId}`);
+  if (champ && brouillon && !champ.value.trim()) {
+    champ.value = brouillon;
+    toast('📝 Brouillon restauré');
+  }
+}
+function effacerBrouillon(ficheId) {
+  localStorage.removeItem(`brouillon_cr_${ficheId}`);
 }
 
 async function saveObs(ficheId) {
@@ -5124,7 +5256,7 @@ async function saveObs(ficheId) {
     toast('✅ Observation enregistrée !');
   } catch (err) {
     console.error(err);
-    toast('❌ Erreur — vérifiez votre connexion internet');
+    toast('❌ Erreur, vérifiez votre connexion internet');
     btn.disabled = false;
     btn.textContent = "💾 Enregistrer l'observation";
   }
@@ -5477,10 +5609,43 @@ function renderEvFiches() {
   };
 
   el.innerHTML =
+    renderBandeRecentes(q) +
     renderSection('⚠️ En retard', 'var(--c3)', late) +
     renderSection("✅ À faire aujourd'hui", 'var(--ok)', todayF) +
     renderSection('🆕 Nouveaux à contacter', '#1E64C8', newOnes) +
     renderSection('📋 Autres', 'var(--mu)', rest);
+}
+
+/* ── FICHES RÉCEMMENT CONSULTÉES ──
+   Reprendre où on s'était arrêté sans re-chercher — utile pour
+   quelqu'un d'occupé qui doit reprendre une conversation en cours. ── */
+function renderBandeRecentes(q) {
+  if (q) return ''; // pas utile pendant une recherche active
+  let recents = [];
+  try { recents = JSON.parse(localStorage.getItem('ev_fiches_recentes') || '[]'); } catch (e) {}
+  const fichesRecentes = recents
+    .map(id => (S.myFiches || []).find(f => f.id === id && !f.deleted))
+    .filter(Boolean)
+    .slice(0, 6);
+  if (!fichesRecentes.length) return '';
+  return `<div style="margin-bottom:12px;">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);padding:2px 2px 6px;">🕒 Récemment consultées</div>
+    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">
+      ${fichesRecentes.map(f => `
+        <button onclick="toggleEvFiche('${f.id}')" style="flex-shrink:0;background:var(--surface);border:1.5px solid var(--bo);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap;cursor:pointer;">
+          ${_esc(f.nom || '')} ${_esc((f.prenom||'').charAt(0))}.
+        </button>`).join('')}
+    </div>
+  </div>`;
+}
+
+function _majFichesRecentes(ficheId) {
+  let recents = [];
+  try { recents = JSON.parse(localStorage.getItem('ev_fiches_recentes') || '[]'); } catch (e) {}
+  recents = recents.filter(id => id !== ficheId);
+  recents.unshift(ficheId);
+  recents = recents.slice(0, 8);
+  localStorage.setItem('ev_fiches_recentes', JSON.stringify(recents));
 }
 
 function renderEvFicheCard(f) {
@@ -5623,7 +5788,7 @@ function renderEvFicheCard(f) {
     + '<input type="date" id="af-date-' + f.id + '" value="' + today + '"></div>'
     + '<div class="field"><label>Compte-rendu <span style="font-weight:400;text-transform:none;font-size:10px;color:var(--mu);">(optionnel)</span></label>'
     + '<div style="position:relative;">'
-    + '<textarea id="af-note-' + f.id + '" placeholder="R\u00e9sum\u00e9 de l\'\u00e9change, \u00e9tat spirituel\u2026 (ou dictez avec le micro \ud83c\udfa4)"></textarea>'
+    + '<textarea id="af-note-' + f.id + '" oninput="sauvegarderBrouillon(\'' + f.id + '\')" placeholder="R\u00e9sum\u00e9 de l\'\u00e9change, \u00e9tat spirituel\u2026 (ou dictez avec le micro \ud83c\udfa4)"></textarea>'
     + '<button type="button" class="btn-mic" id="af-mic-' + f.id + '" onclick="toggleDictee(\'af-note-' + f.id + '\', \'af-mic-' + f.id + '\')" title="Dicter le compte-rendu">\ud83c\udfa4</button>'
     + '</div></div>'
     + '<div class="field"><label>Dur\u00e9e (min)</label>'
@@ -5641,7 +5806,7 @@ function renderEvFicheCard(f) {
     + '</div>'
     + '<div class="grid2">'
     + '<div class="field"><label>Prochaine action</label>'
-    + '<input type="text" id="af-next-' + f.id + '" placeholder="ex: Rappeler, Inviter\u2026"></div>'
+    + '<input type="text" id="af-next-' + f.id + '" list="dl-actions" placeholder="ex: Rappeler, Inviter\u2026"></div>'
     + '<div class="field"><label>Date prochaine action</label>'
     + '<input type="date" id="af-next-date-' + f.id + '"></div>'
     + '</div>'
@@ -5758,7 +5923,7 @@ async function creerSortieCollective() {
   if (btn) btn.disabled = true;
   try {
     await window._createSortieCollective({ date, lieu, description: desc || null, creePar: S.respNom || 'Responsable' });
-    toast('✅ Sortie collective publiée — les évangélistes vont être notifiés');
+    toast('✅ Sortie collective publiée, les évangélistes vont être notifiés');
     document.getElementById('sc-date').value = '';
     document.getElementById('sc-lieu').value = '';
     document.getElementById('sc-desc').value = '';
@@ -5969,7 +6134,7 @@ function renderCommQueue() {
   const list = S.commQueue || [];
   if (!list.length) {
     S._commQueueSel = new Set();
-    el.innerHTML = '<div class="empty-state"><div class="ico">✅</div><p>Aucune communication en attente — tout est à jour</p></div>';
+    el.innerHTML = '<div class="empty-state"><div class="ico">✅</div><p>Aucune communication en attente, tout est à jour</p></div>';
     return;
   }
   if (!S._commQueueSel) S._commQueueSel = new Set();
@@ -6118,7 +6283,7 @@ async function envoyerCommunicationEmail(id) {
   const c = (S.commQueue || []).find(x => x.id === id);
   if (!c) return;
   const contenu = document.getElementById(`comm-txt-${id}`)?.value.trim() || c.contenu;
-  if (!c.evEmail) { toast('❌ Aucun email pour cet évangéliste — ajoutez-en un dans sa fiche évangéliste'); return; }
+  if (!c.evEmail) { toast('❌ Aucun email pour cet évangéliste, ajoutez-en un dans sa fiche évangéliste'); return; }
   try {
     const badge   = _COMM_BADGES[c.type] || '📧 Communication';
     const htmlMsg = _buildCommunicationHTML(badge, contenu);
@@ -6182,7 +6347,7 @@ async function ignorerCommunication(id) {
 async function remettreEnAttenteCommunication(id) {
   try {
     await window._remettreEnAttenteCommunication(id);
-    toast('↩️ Remis dans la file d\'envoi — modifiable ci-dessus');
+    toast('↩️ Remis dans la file d\'envoi, modifiable ci-dessus');
     switchTab('communications', document.querySelector('[onclick*="communications"]'));
   } catch (e) {
     console.error(e);
@@ -6432,7 +6597,7 @@ function openSortieEdit(id) {
   }
   // Scroll vers le formulaire
   document.getElementById('sor-date')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  toast('✏️ Mode édition — modifiez puis sauvegardez');
+  toast('✏️ Mode édition activé');
 }
 
 async function updateSortie() {
@@ -6872,7 +7037,7 @@ async function marquerRegle(ficheId, btn) {
   } catch(e) {
     btn.disabled = false;
     btn.textContent = '✅ Réglé';
-    toast('❌ Erreur — réessayez');
+    toast('❌ Erreur, réessayez');
   }
 }
 
@@ -7165,6 +7330,7 @@ async function saveEvActivity(ficheId) {
     // Le rappel 48h avant (si prochaine action planifiée) est géré côté
     // serveur (fiable, cron) à partir de nextActionDate sur la fiche.
     // Reset form
+    effacerBrouillon(ficheId);
     [`af-note-${ficheId}`,`af-next-${ficheId}`,`af-duree-${ficheId}`,`af-autres-${ficheId}`].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById(`af-next-date-${ficheId}`)?.value && (document.getElementById(`af-next-date-${ficheId}`).value='');
     // Reset checkboxes participants
@@ -7628,7 +7794,7 @@ function renderDispoToggle() {
 }
 
 async function toggleMaDisponibilite() {
-  if (!S.evId) { toast('❌ Session non identifiée — reconnectez-vous'); return; }
+  if (!S.evId) { toast('❌ Session non identifiée, reconnectez-vous'); return; }
   const btn = document.getElementById('ev-dispo-btn');
   const current = btn && btn.dataset.on === '1';
   const next = !current;
@@ -7979,7 +8145,7 @@ async function testRappelEmail() {
   const email = cached?.email;
   const nom   = cached?.nom || S.evNom || 'Évangéliste';
   if (!email) {
-    toast('⚠️ Aucun email enregistré — ajoutez-le dans votre profil');
+    toast('⚠️ Aucun email enregistré, ajoutez-le dans votre profil');
     return;
   }
   if (!confirm(`Envoyer un email de test à : ${email} ?`)) return;
@@ -8204,7 +8370,7 @@ async function doUnassignEvangeliste() {
         de: 'assigne', vers: 'nouveau', par: whoAmI(), date: new Date().toISOString()
       })
     });
-    toast(`✅ ${nomEv} retiré(e) — fiche remise en "Nouveau"`);
+    toast(`✅ ${nomEv} retiré(e), fiche remise en "Nouveau"`);
     closeModal('modal-fiche');
   } catch(err) { toast('❌ Erreur lors du retrait'); }
 }
@@ -8394,6 +8560,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      // Détection de doublon (même téléphone) avant de créer la fiche —
+      // évite de créer deux fois la même personne par erreur.
+      const telSaisi = document.getElementById('f-tel').value.trim();
+      if (telSaisi) {
+        try {
+          const dupSnap = await db.collection('fiches').where('telephone', '==', telSaisi).limit(1).get();
+          if (!dupSnap.empty) {
+            const existant = dupSnap.docs[0].data();
+            const continuer = confirm(`⚠️ Une fiche existe déjà avec ce numéro de téléphone :\n${existant.nom || ''} ${existant.prenom || ''}\n\nContinuer quand même et créer une nouvelle fiche ?`);
+            if (!continuer) return;
+          }
+        } catch (e) { /* si la vérification échoue, on n'empêche pas la création */ }
+      }
+
       S.submitting = true;
       const btn = document.getElementById('form-submit');
       btn.dataset.originalText = btn.textContent;
@@ -8434,7 +8614,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.disabled = false;
         btn.textContent = btn.dataset.originalText || 'Enregistrer la fiche';
         // Même en cas d'erreur réseau, Firebase offline met en file d'attente
-        toast('📵 Connexion lente — fiche sauvegardée, synchronisation en cours…');
+        toast('📵 Connexion lente, fiche sauvegardée, synchronisation en cours…');
         document.getElementById('success-overlay').classList.add('show');
         window.scrollTo(0, 0);
       }
@@ -11768,6 +11948,127 @@ if (_origInitDash) {
   <button class="btn-icon" style="color:#fff;font-size:18px;" onclick="toggleModeSelection()" title="Annuler">✕</button>
 </div>
 
+<!-- MODAL AIDE / GUIDE D'UTILISATION -->
+<div class="modal-overlay" id="modal-aide" style="display:none;z-index:9999;">
+  <div class="modal modal-lg" style="max-height:85vh;display:flex;flex-direction:column;">
+    <div class="modal-head">
+      <div class="modal-title">❓ Guide d'utilisation</div>
+      <button class="modal-close" onclick="closeModal('modal-aide')">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;padding:0 20px;border-bottom:1px solid var(--bo);">
+      <button class="tbtn-period on" id="aide-tab-ev-btn" onclick="switchAideTab('ev')" style="border-radius:8px 8px 0 0;">👤 Évangéliste</button>
+      <button class="tbtn-period" id="aide-tab-resp-btn" onclick="switchAideTab('resp')" style="border-radius:8px 8px 0 0;">🗂️ Responsable</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1;">
+
+      <div id="aide-contenu-ev">
+        <div class="aide-section">
+          <div class="aide-titre">📂 Mes fiches</div>
+          <p>Vos fiches sont classées automatiquement : <strong>En retard</strong> (une action était prévue et n'a pas eu lieu), <strong>À faire aujourd'hui</strong>, <strong>Nouveaux à contacter</strong> et <strong>Autres</strong>. Vous n'avez pas besoin de trier vous-même.</p>
+          <p><strong>🕒 Récemment consultées</strong>, en haut de la liste, vous permet de reprendre une fiche que vous venez de regarder.</p>
+          <p>La recherche accepte aussi la voix : appuyez sur 🎤 et parlez.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">📞 Contact rapide</div>
+          <p>Sur chaque fiche, deux boutons : <strong>📞 Appelé</strong> et <strong>🚶 Visité</strong>. Un tap suffit pour enregistrer le contact. Vous avez 5 secondes pour annuler si c'est une erreur, avec le bouton "↩️ Annuler" en bas de l'écran.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">📝 Compte-rendu détaillé</div>
+          <p>Ouvrez une fiche pour écrire un compte-rendu plus complet. Le champ n'est <strong>pas obligatoire</strong> : si vous le laissez vide, un texte par défaut est utilisé. Vous pouvez aussi <strong>dicter</strong> avec le micro 🎤 au lieu de taper.</p>
+          <p>Si l'app se ferme pendant que vous écrivez, votre texte n'est pas perdu. Il est sauvegardé automatiquement et réapparaît à la réouverture.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">📅 Prochaine action</div>
+          <p>Dans le formulaire de compte-rendu, deux boutons de suggestion : <strong>"Dans 2 sem. (à recontacter)"</strong> et <strong>"Dans 1 mois (à revisiter)"</strong>. Ils remplissent la date automatiquement, mais vous pouvez toujours choisir votre propre date.</p>
+          <p>Pour modifier ou annuler une action déjà programmée, tapez directement sur le badge ⚡ affiché sur la fiche, avec l'icône ✏️.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">💬 Message groupé WhatsApp</div>
+          <p>Dans "Mes fiches", bouton <strong>"☑️ Message groupé WhatsApp"</strong> : cochez plusieurs fiches, écrivez votre message une seule fois (utilisez <code>{prenom}</code> pour qu'il soit personnalisé), puis WhatsApp s'ouvre pour chaque contact l'un après l'autre. WhatsApp ne permet malheureusement pas l'envoi groupé automatique, c'est une vraie limite de la plateforme, pas de l'app.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">📞 Mes activités & 📅 Agenda</div>
+          <p>"Mes activités" propose un formulaire complet si vous préférez choisir la fiche dans une liste plutôt que de la chercher. "Agenda" donne une vue d'ensemble (retards, cette semaine, plus tard) avec les mêmes boutons rapides.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">🚌 Sorties collectives</div>
+          <p>Quand une sortie est publiée, vous êtes notifié(e) et pouvez répondre "Je viens" ou "Je ne peux pas" directement. Un compte-rendu peut être ajouté après.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">👥 Contacts</div>
+          <p>Retrouvez les autres évangélistes de l'équipe pour les appeler ou leur écrire sur WhatsApp en un clic.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">🔔 Notifications</div>
+          <p>Une cloche interne à l'app vous prévient d'un rappel ou d'une action de la responsable. Si vous avez autorisé les notifications sur votre téléphone, une bannière peut aussi apparaître. Cela fonctionne mieux si l'app est <strong>installée</strong> (voir ci-dessous), surtout sur iPhone.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">📲 Installer l'application</div>
+          <p>Bouton 📲 en haut de l'écran : l'app s'installe comme une vraie application, avec une icône sur votre écran d'accueil. Elle devient plus rapide et les notifications fonctionnent mieux.</p>
+        </div>
+      </div>
+
+      <div id="aide-contenu-resp" style="display:none;">
+        <div class="aide-section">
+          <div class="aide-titre">📂 Fiches</div>
+          <p>Vue de toutes les fiches de la commission. Filtres disponibles : statut de suivi, évangéliste, zone, école, statut église, et <strong>"⚠️ Infos manquantes"</strong> pour repérer les fiches incomplètes (téléphone, nationalité, quartier, sexe ou évangéliste non renseigné).</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">📊 Analytics</div>
+          <p>Statistiques globales et par évangéliste (fiches, visites, activités, retards), présentées par ordre alphabétique, sans classement ni comparaison entre personnes.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">📞 Suivi</div>
+          <p>Barre de progression par évangéliste (fiches visitées / total) et liste des retards. Un formulaire rapide permet aussi d'enregistrer une activité vous-même si besoin.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">🗺️ Équipes</div>
+          <p>Zones et carte de répartition géographique des évangélistes.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">🚌 Sorties</div>
+          <p>Créez une sortie collective (lieu, date, description) : elle est automatiquement diffusée à tous les évangélistes via Communications (voir ci-dessous). Un filtre "À venir / Historique" sépare les sorties passées.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">📬 Communications</div>
+          <p>Tous les rappels (hebdomadaire, visite mensuelle, action prévue 48h avant, sortie collective) arrivent ici <strong>par évangéliste</strong>, en attente. Rien ne part automatiquement : vous validez ou modifiez le texte, puis cliquez séparément sur <strong>"Envoyer l'email"</strong> et <strong>"Envoyer la notification"</strong>. Vous pouvez aussi composer un message libre, à un ou plusieurs évangélistes. L'historique garde une trace, avec la possibilité de renvoyer (🔁) ou de supprimer définitivement (🗑️).</p>
+          <p>La notification "cloche" part immédiatement. La bannière sur le téléphone part au passage suivant du script automatique, quelques minutes plus tard, car elle nécessite une clé technique que seul le serveur possède.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">👥 Évangélistes</div>
+          <p>Gestion des comptes évangélistes (ajout, modification, désactivation).</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">📇 Contacts équipe</div>
+          <p>Contactez n'importe quel évangéliste par appel ou WhatsApp. Le bloc <strong>"🔔 À relancer personnellement"</strong> liste ceux sans activité depuis 7 jours ou plus. Un rappel humain de votre part est souvent plus efficace qu'une notification automatique.</p>
+        </div>
+
+        <div class="aide-section">
+          <div class="aide-titre">📧 Rapports</div>
+          <p>Rapports hebdomadaire, mensuel et annuel envoyés par email, au format détaillé ou résumé, déclenchés manuellement par vous.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <!-- MODAL MESSAGE GROUPÉ WHATSAPP (global) -->
 <div class="modal-overlay" id="modal-msg-groupe" style="display:none;z-index:9999;">
   <div class="modal" style="max-width:520px;">
@@ -11843,6 +12144,25 @@ if (_origInitDash) {
 </div>
 
 <!-- ── BOUTON D'INSTALLATION DE L'APP (PWA) — PC, Android, iOS ── -->
+<div id="undo-bar" style="display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:2000;background:#1E0A0A;color:#fff;border-radius:40px;padding:10px 10px 10px 18px;box-shadow:0 8px 30px rgba(0,0,0,0.3);align-items:center;gap:12px;max-width:92vw;">
+  <span id="undo-bar-msg" style="font-size:13px;font-weight:600;white-space:nowrap;"></span>
+  <button onclick="annulerDernierContact()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:30px;padding:7px 16px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;">↩️ Annuler</button>
+</div>
+
+<div id="offline-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:2000;background:var(--wa);color:#fff;text-align:center;padding:7px;font-size:12px;font-weight:700;">
+  📡 Hors ligne — vos actions seront envoyées dès le retour du réseau
+</div>
+
+<datalist id="dl-actions">
+  <option value="Rappeler">
+  <option value="Inviter au culte">
+  <option value="Prier ensemble">
+  <option value="Prendre des nouvelles">
+  <option value="Visiter">
+  <option value="Envoyer un verset">
+  <option value="Proposer un accompagnement">
+</datalist>
+
 <div id="pwa-install-banner" style="display:none;position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:1000;background:var(--surface);border:1.5px solid var(--bo);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.18);padding:12px 16px;max-width:380px;width:calc(100vw - 32px);align-items:center;gap:10px;">
   <span style="font-size:22px;">📲</span>
   <div style="flex:1;font-size:12px;color:var(--tx);line-height:1.4;">
@@ -11854,13 +12174,66 @@ if (_origInitDash) {
 </div>
 
 <script>
-/* ── PWA : SERVICE WORKER + INSTALLATION (PC / Android / iOS) ─ */
+/* ── PWA : SERVICE WORKER + INSTALLATION (PC / Android / iOS) ─
+   + DÉTECTION DE MISE À JOUR, comme les vraies applis :
+   quand une nouvelle version d'index.html a été poussée sur
+   GitHub et que le service worker l'a téléchargée en arrière-plan,
+   une bannière "🔄 Nouvelle version disponible" apparaît — la
+   personne choisit quand recharger, plutôt qu'un rechargement
+   surprise en pleine saisie. ── */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      // Vérifie s'il y a une mise à jour dès l'arrivée sur l'app
+      reg.update().catch(() => {});
+
+      // Une nouvelle version vient d'être détectée et installée en fond
+      reg.addEventListener('updatefound', () => {
+        const worker = reg.installing;
+        if (!worker) return;
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            afficherBanniereMiseAJour(reg);
+          }
+        });
+      });
+
+      // Revérifie silencieusement toutes les 30 min (utile si l'app
+      // reste ouverte longtemps sans être rechargée)
+      setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000);
+    }).catch(() => {});
+
+    // Une fois que la nouvelle version prend le contrôle, on recharge
+    // une seule fois proprement (évite une boucle de rechargement)
+    let dejaRecharge = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (dejaRecharge) return;
+      dejaRecharge = true;
+      window.location.reload();
+    });
   });
 }
 
+function afficherBanniereMiseAJour(reg) {
+  if (document.getElementById('update-banner')) return; // déjà affichée
+  const banner = document.createElement('div');
+  banner.id = 'update-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:3000;background:var(--c1,#7B1111);color:#fff;padding:11px 16px;display:flex;align-items:center;justify-content:center;gap:14px;font-size:13px;font-weight:600;box-shadow:0 2px 12px rgba(0,0,0,.2);flex-wrap:wrap;';
+  banner.innerHTML = `
+    <span>🔄 Nouvelle version de l'app disponible</span>
+    <button id="update-banner-btn" style="background:#fff;color:var(--c1,#7B1111);border:none;border-radius:20px;padding:6px 16px;font-size:12.5px;font-weight:700;cursor:pointer;">Mettre à jour</button>
+  `;
+  document.body.prepend(banner);
+  document.getElementById('update-banner-btn').onclick = () => {
+    const worker = reg.waiting || reg.installing;
+    if (worker) worker.postMessage({ type: 'SKIP_WAITING' });
+    banner.innerHTML = '<span>⏳ Mise à jour en cours…</span>';
+  };
+}
+</script>
+
+<script>
+/* ── INSTALLATION PWA (PC / Android / iOS) ─ */
 let _deferredInstallPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
@@ -11885,6 +12258,15 @@ function dismissPwaBanner() {
   if (b) b.style.display = 'none';
   localStorage.setItem('eeam_pwa_dismissed', '1');
 }
+
+// Bouton permanent "📲" dans la barre du haut — toujours accessible,
+// même si la bannière a été fermée définitivement une fois.
+function _majBoutonInstallerPermanent() {
+  const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+  const btn = document.getElementById('ev-install-btn-perm');
+  if (btn) btn.style.display = isStandalone ? 'none' : 'inline-flex';
+}
+_majBoutonInstallerPermanent();
 
 // iOS Safari n'a pas d'événement beforeinstallprompt : on affiche le mode d'emploi
 (function() {
