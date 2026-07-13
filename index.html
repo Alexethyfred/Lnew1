@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#7B1111">
-<title>Commission Témoignage — Paroisse de Fès v2</title>
+<title>Commission Témoignage — Paroisse de Fès v9</title>
 
 <!-- ── PWA : installable sur PC, Android, iOS ─────────────── -->
 <link rel="manifest" href="manifest.json">
@@ -1867,6 +1867,10 @@ body .animate, body .spinner, body [class*="anim"] {
           <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><div id="chart-anl-ev-fiches-inner" style="min-width:320px;"><div class="chart-wrap-tall"><canvas id="chart-anl-ev-fiches"></canvas></div></div></div>
         </div>
         <div id="anl-ev-detail-list" style="margin-bottom:14px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" onclick="sendEvangelistesReport()" style="gap:6px;">📧 Envoyer par email</button>
+          <button class="btn btn-outline btn-sm" onclick="printEvangelistesReport()" style="gap:6px;">🖨️ Imprimer</button>
+        </div>
       </div>
 
     </div><!-- /tab-analytics -->
@@ -2393,10 +2397,6 @@ body .animate, body .spinner, body [class*="anim"] {
         </div>
         <div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;">
           <div id="ev-perf-bar" style="height:100%;background:linear-gradient(90deg,var(--c1),var(--c3));border-radius:3px;transition:width .5s;width:0%;"></div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:14px;">
-          <button type="button" class="btn btn-outline btn-sm" style="flex:1;" onclick="ouvrirEvRapportEmail()">📧 Envoyer par email</button>
-          <button type="button" class="btn btn-outline btn-sm" style="flex:1;" onclick="printEvRapport()">🖨️ Imprimer</button>
         </div>
       </div>
 
@@ -8930,6 +8930,7 @@ let _rapportModalState = { type: null, mode: null };
 function sendWeeklyReport()  { _ouvrirModalRapport('weekly'); }
 function sendMonthlyReport() { _ouvrirModalRapport('monthly'); }
 function sendAnnualReport()  { _ouvrirModalRapport('annual'); }
+function sendEvangelistesReport() { _ouvrirModalRapport('evangelistes'); }
 
 function _ouvrirModalRapport(type) {
   _rapportModalState = { type, mode: null };
@@ -8977,6 +8978,7 @@ async function _rapportConfirmerEnvoi() {
   if (type === 'weekly')  await _envoyerWeeklyReport(email, mode);
   if (type === 'monthly') await _envoyerMonthlyReport(email, mode);
   if (type === 'annual')  await _envoyerAnnualReport(email, mode);
+  if (type === 'evangelistes') await _envoyerEvangelistesReport(email, mode);
 }
 
 /* ── 9a. RAPPORT HEBDOMADAIRE ──────────────────────────────── */
@@ -10749,101 +10751,6 @@ function updateEvPerfStats() {
   populateEvActFicheSelect();
 }
 
-/* ── Rapport personnel évangéliste : impression + email ──────
-   Réutilise _openPrintWindow() et _ejsSend() / _EJS (définis plus
-   bas dans le fichier) — voir section "IMPRESSION DES RAPPORTS". */
-function _buildEvRapportHTML() {
-  const fiches = S.myFiches || [];
-  const acts = (S.activities || []).filter(a => a.evangelisteId === S.evId || a.parId === S.evId);
-  const today = new Date().toISOString().split('T')[0];
-  const vis = fiches.filter(f => f.statut === 'visite').length;
-  const retard = fiches.filter(f => f.nextActionDate && f.nextActionDate < today).length;
-  const taux = fiches.length > 0 ? Math.round(vis / fiches.length * 100) : 0;
-  const appels = acts.filter(a => a.type === 'appel').length;
-  const visites = acts.filter(a => a.type === 'visite').length;
-  const messages = acts.filter(a => a.type === 'message').length;
-  const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-
-  const fichesRows = fiches.length ? fiches.map(f =>
-    `<tr><td>${f.nom || ''} ${f.prenom || ''}</td><td>${(typeof statutLabel === 'function' ? statutLabel(f.statut) : f.statut) || '—'}</td><td>${f.prochaineVisite || '—'}</td><td>${f.nextActionDate || '—'}</td></tr>`
-  ).join('') : '<tr><td colspan="4" style="text-align:center;color:#999;">Aucune fiche confiée</td></tr>';
-
-  const icons = { appel: '📞', visite: '🚶', message: '💬' };
-  const actsRecentes = acts.slice().sort((a, b) => {
-    const da = a.createdAt?.toDate?.() || new Date(a.date || 0);
-    const db_ = b.createdAt?.toDate?.() || new Date(b.date || 0);
-    return db_ - da;
-  }).slice(0, 15);
-  const actsRows = actsRecentes.length ? actsRecentes.map(a => {
-    const d = a.createdAt?.toDate?.() ? a.createdAt.toDate().toLocaleDateString('fr-FR') : (a.date || '—');
-    return `<tr><td>${icons[a.type] || '📋'} ${a.ficheNom || '—'}</td><td>${d}</td><td>${(a.note || '—').substring(0, 90)}</td></tr>`;
-  }).join('') : '<tr><td colspan="3" style="text-align:center;color:#999;">Aucune activité enregistrée</td></tr>';
-
-  return `
-    <div class="print-header">
-      <div class="print-title">📈 Mon rapport d'activité — ${S.evNom || 'Évangéliste'}</div>
-      <div class="print-sub">Commission Témoignage — Paroisse de Fès &nbsp;|&nbsp; Généré le ${dateStr}</div>
-    </div>
-    <div class="kpi-grid">
-      <div class="kpi"><div class="kpi-num">${fiches.length}</div><div class="kpi-lbl">Fiches confiées</div></div>
-      <div class="kpi"><div class="kpi-num">${vis}</div><div class="kpi-lbl">Visitées</div></div>
-      <div class="kpi"><div class="kpi-num">${taux}%</div><div class="kpi-lbl">Taux de visite</div></div>
-      <div class="kpi"><div class="kpi-num">${retard}</div><div class="kpi-lbl">En retard</div></div>
-    </div>
-    <div class="section-title">Activités — ${acts.length} au total (📞 ${appels} appel(s) · 🚶 ${visites} visite(s) · 💬 ${messages} message(s))</div>
-    <div class="section-title">Mes fiches (${fiches.length})</div>
-    <table><tr><th>Nom</th><th>Statut</th><th>Prochaine visite</th><th>Prochaine action</th></tr>${fichesRows}</table>
-    <div class="section-title">Dernières activités</div>
-    <table><tr><th>Fiche</th><th>Date</th><th>Note</th></tr>${actsRows}</table>
-    <div class="footer">Église Évangélique au Maroc — Paroisse de Fès · Commission Témoignage</div>
-  `;
-}
-
-function printEvRapport() {
-  _openPrintWindow(_buildEvRapportHTML(), 'Mon rapport d\'activité');
-}
-
-function ouvrirEvRapportEmail() {
-  const errDiv = document.getElementById('ev-rapport-email-error');
-  if (errDiv) errDiv.style.display = 'none';
-  const input = document.getElementById('input-ev-rapport-email');
-  if (input) input.value = '';
-  openModal('modal-ev-rapport-email');
-}
-
-async function envoyerEvRapportEmail() {
-  const input = document.getElementById('input-ev-rapport-email');
-  const email = (input?.value || '').trim();
-  const errDiv = document.getElementById('ev-rapport-email-error');
-  if (!email || !email.includes('@') || !email.includes('.')) {
-    if (errDiv) errDiv.style.display = 'block';
-    input?.focus();
-    return;
-  }
-  if (errDiv) errDiv.style.display = 'none';
-  closeModal('modal-ev-rapport-email');
-
-  const fiches = S.myFiches || [];
-  const acts = (S.activities || []).filter(a => a.evangelisteId === S.evId || a.parId === S.evId);
-  const htmlContent = _buildEvRapportHTML();
-  const sujet = `📈 Mon rapport d'activité — ${S.evNom || 'Évangéliste'}`;
-  const texteFallback = `Rapport d'activité — ${S.evNom || 'Évangéliste'}\n\nFiches confiées : ${fiches.length}\nActivités : ${acts.length}\n\nÉglise Évangélique au Maroc — Paroisse de Fès`;
-
-  try {
-    await _ejsSend(_EJS.service, _EJS.templateRapport, {
-      to_email: email,
-      action: htmlContent,
-      ficheNom: sujet,
-      evNom: S.evNom || 'Évangéliste',
-      prochaineAction: texteFallback,
-      email: email
-    }, 'rapport-ev');
-    toast('✅ Rapport envoyé à ' + email);
-  } catch (e) {
-    // _ejsSend a déjà affiché le toast approprié
-  }
-}
-
 // Retards dans l'espace évangéliste
 function renderEvRetards() {
   // Les retards sont affichés directement dans renderEvAgenda (groupes colorés)
@@ -11166,6 +11073,88 @@ function printAnnuelReport() {
     <div class="footer">Église Évangélique au Maroc — Paroisse de Fès · Commission Témoignage · Bilan ${startYear}-${startYear+1} · Généré le ${new Date().toLocaleDateString('fr-FR')}</div>`;
 
   _openPrintWindow(html, `Bilan Annuel ${startYear}-${startYear+1}`);
+}
+
+/* ── Rapport "Détail par évangéliste" (Analytics → Évangélistes) ──
+   Réutilise la période sélectionnée dans le sous-onglet (anl-ev-period)
+   et la même logique de calcul que renderAnlEvangelistes(). */
+function _buildEvangelistesRapportHTML(detaille) {
+  const selPeriod = document.getElementById('anl-ev-period');
+  const days = parseInt(selPeriod?.value || 30);
+  const periodLabel = { '7': '7 derniers jours', '30': '30 derniers jours', '90': '3 derniers mois', '0': 'Tout le temps' }[String(days)] || '30 derniers jours';
+  const now = new Date();
+  const since = days > 0 ? new Date(now - days * 24 * 60 * 60 * 1000) : new Date(0);
+  const fiches = getFiches();
+  const acts = (S.activities || []).filter(a => {
+    if (days === 0) return true;
+    const d = a.createdAt?.toDate?.() || new Date(a.date || 0);
+    return d >= since;
+  });
+  const evActifs = (S.evs || []).filter(e => e.actif).slice().sort((a, b) => a.nom.localeCompare(b.nom));
+
+  const totFiches = fiches.length;
+  const totActs = acts.length;
+  const totAppels = acts.filter(a => a.type === 'appel').length;
+  const totVisites = acts.filter(a => a.type === 'visite').length;
+
+  const rows = evActifs.map(e => {
+    const ef = fiches.filter(f => f.evangelisteId === e.id).length;
+    const eVis = fiches.filter(f => f.evangelisteId === e.id && f.statut === 'visite').length;
+    const ea = acts.filter(a => a.evangelisteId === e.id || a.parId === e.id).length;
+    const eRet = fiches.filter(f => f.evangelisteId === e.id && f.nextActionDate && f.nextActionDate < now.toISOString().split('T')[0]).length;
+    const eAppels = acts.filter(a => (a.evangelisteId === e.id || a.parId === e.id) && a.type === 'appel').length;
+    const eVisites = acts.filter(a => (a.evangelisteId === e.id || a.parId === e.id) && a.type === 'visite').length;
+    const eMsgs = acts.filter(a => (a.evangelisteId === e.id || a.parId === e.id) && a.type === 'message').length;
+    const taux = ef > 0 ? Math.round(eVis / ef * 100) : 0;
+    return detaille
+      ? `<tr><td>${e.nom}</td><td>${e.equipe || '—'}</td><td style="text-align:center;">${ef}</td><td style="text-align:center;">${eVis}</td><td style="text-align:center;">${taux}%</td><td style="text-align:center;">${eAppels}</td><td style="text-align:center;">${eVisites}</td><td style="text-align:center;">${eMsgs}</td><td style="text-align:center;color:${eRet > 0 ? '#C0392B' : '#1A7A3A'};font-weight:700;">${eRet}</td></tr>`
+      : `<tr><td>${e.nom}</td><td style="text-align:center;">${ef}</td><td style="text-align:center;">${eVis}</td><td style="text-align:center;font-weight:700;color:${taux >= 70 ? 'green' : taux >= 40 ? 'orange' : '#C0392B'};">${taux}%</td><td style="text-align:center;">${ea}</td></tr>`;
+  }).join('');
+
+  const tableHeaders = detaille
+    ? `<tr><th>Évangéliste</th><th>Zone</th><th>Fiches</th><th>Visitées</th><th>Taux</th><th>📞 Appels</th><th>🚶 Visites</th><th>💬 Msgs</th><th>⚠️ Retards</th></tr>`
+    : `<tr><th>Évangéliste</th><th>Fiches</th><th>Visitées</th><th>Taux</th><th>Activités</th></tr>`;
+
+  return `
+    <div class="print-header">
+      <div class="print-title">👥 Détail par évangéliste</div>
+      <div class="print-sub">Commission Témoignage — Paroisse de Fès &nbsp;|&nbsp; Période : ${periodLabel} · Généré le ${now.toLocaleDateString('fr-FR')}</div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-num">${evActifs.length}</div><div class="kpi-lbl">Évangélistes actifs</div></div>
+      <div class="kpi"><div class="kpi-num">${totFiches}</div><div class="kpi-lbl">Fiches totales</div></div>
+      <div class="kpi"><div class="kpi-num">${totActs}</div><div class="kpi-lbl">Activités (période)</div></div>
+      <div class="kpi"><div class="kpi-num">${totAppels + totVisites}</div><div class="kpi-lbl">📞 + 🚶 (période)</div></div>
+    </div>
+    <div class="section-title">Détail par évangéliste — ordre alphabétique, sans classement</div>
+    <table>${tableHeaders}${rows}</table>
+    <div class="footer">Église Évangélique au Maroc — Paroisse de Fès · Commission Témoignage · Présenté sans classement ni comparaison entre personnes.</div>`;
+}
+
+function printEvangelistesReport() {
+  _openPrintWindow(_buildEvangelistesRapportHTML(true), 'Détail par évangéliste');
+}
+
+async function _envoyerEvangelistesReport(email, mode) {
+  const detaille = mode === 'detaille';
+  const htmlContent = _buildEvangelistesRapportHTML(detaille);
+  const evActifs = (S.evs || []).filter(e => e.actif);
+  const sujet = `👥 Détail par évangéliste — ${detaille ? 'Détaillé' : 'Grandes lignes'}`;
+  const texteFallback = `Détail par évangéliste\n\nÉvangélistes actifs : ${evActifs.length}\n\nÉglise Évangélique au Maroc — Paroisse de Fès`;
+
+  try {
+    await _ejsSend(_EJS.service, _EJS.templateRapport, {
+      to_email: email,
+      action: htmlContent,
+      ficheNom: sujet,
+      evNom: 'Commission Témoignage — Paroisse de Fès',
+      prochaineAction: texteFallback,
+      email: email
+    }, 'rapport-evangelistes');
+    toast('✅ Rapport [' + (detaille ? 'Détaillé' : 'Grandes lignes') + '] envoyé à ' + email);
+  } catch (e) {
+    // _ejsSend a déjà affiché le toast approprié
+  }
 }
 
 /* ── updateEvStats override géré plus haut (ligne ~8888) ── */
@@ -11905,40 +11894,6 @@ if (_origInitDash) {
   </div>
 </div>
 
-<!-- ── MODAL RAPPORT ÉVANGÉLISTE (envoi email) ─────────────── -->
-<div class="modal-overlay" id="modal-ev-rapport-email" style="z-index:9999;">
-  <div class="modal" style="max-width:420px;">
-    <div class="modal-head" style="background:var(--c5);">
-      <h2 style="font-size:16px;color:var(--c1);display:flex;align-items:center;gap:8px;">
-        📧 Envoyer mon rapport
-      </h2>
-      <button class="modal-close" onclick="closeModal('modal-ev-rapport-email')">✕</button>
-    </div>
-    <div class="modal-body" style="padding:24px 24px 8px;">
-
-      <p style="font-size:13px;color:var(--mu);margin:0 0 18px;line-height:1.6;">
-        Votre rapport d'activité (fiches, visites, taux de suivi) sera envoyé par email, prêt à consulter ou à transmettre.
-      </p>
-
-      <div style="margin-bottom:20px;">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--c1);display:block;margin-bottom:6px;">📬 Adresse email destinataire</label>
-        <input id="input-ev-rapport-email" type="email" placeholder="votre@email.com"
-          style="width:100%;box-sizing:border-box;padding:10px 14px;border:1.5px solid var(--bo);border-radius:8px;font-size:13px;color:var(--tx);background:var(--surface);outline:none;font-family:inherit;"
-          onfocus="this.style.borderColor='var(--c2)';"
-          onblur="this.style.borderColor='var(--bo)';"
-          onkeydown="if(event.key==='Enter')envoyerEvRapportEmail();">
-        <div id="ev-rapport-email-error" style="font-size:11px;color:var(--c3);margin-top:4px;display:none;">⚠️ Email invalide</div>
-      </div>
-
-      <div style="display:flex;gap:10px;padding-bottom:4px;">
-        <button class="btn btn-outline btn-sm" onclick="closeModal('modal-ev-rapport-email')" style="flex:1;color:var(--mu);">Annuler</button>
-        <button class="btn btn-primary btn-sm" onclick="envoyerEvRapportEmail()" style="flex:2;">📧 Envoyer</button>
-      </div>
-
-    </div>
-  </div>
-</div>
-
 <!-- ── MODAL IMPRIMER FICHES VISITEURS ───────────────────── -->
 <div class="modal-overlay" id="modal-imprimer-fiches" style="z-index:9999;">
   <div class="modal" style="max-width:460px;">
@@ -12064,12 +12019,6 @@ if (_origInitDash) {
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">📈 Ma performance</div>
-          <p>En haut de "Mes fiches", un résumé chiffré de votre suivi : nombre de fiches confiées, activités enregistrées, taux de visite (fiches visitées sur total), avec une barre de progression.</p>
-          <p>Deux boutons permettent d'exporter ce rapport (KPIs, liste des fiches, dernières activités) : <strong>"📧 Envoyer par email"</strong> l'envoie à l'adresse de votre choix, et <strong>"🖨️ Imprimer"</strong> ouvre une version prête à imprimer ou à enregistrer en PDF.</p>
-        </div>
-
-        <div class="aide-section">
           <div class="aide-titre">📝 Compte-rendu détaillé</div>
           <p>Ouvrez une fiche pour accéder au formulaire complet : type de contact (appel, visite, message), date, durée, et un champ de texte libre pour raconter l'échange.</p>
           <p>Ce champ n'est <strong>pas obligatoire</strong>. Si vous le laissez vide, un texte par défaut selon le type de contact est utilisé à sa place, pour ne jamais bloquer l'enregistrement.</p>
@@ -12139,7 +12088,8 @@ if (_origInitDash) {
 
         <div class="aide-section">
           <div class="aide-titre">📊 Analytics</div>
-          <p>Statistiques globales de la commission : nombre de fiches, visites, activités par période. Le détail par évangéliste est présenté par ordre alphabétique, volontairement sans classement ni comparaison entre personnes.</p>
+          <p>Statistiques globales de la commission : nombre de fiches, visites, activités par période. Dans le sous-onglet <strong>"👥 Évangélistes"</strong>, le détail par évangéliste est présenté par ordre alphabétique, volontairement sans classement ni comparaison entre personnes.</p>
+          <p>Ce détail peut aussi être <strong>envoyé par email</strong> (avec choix du niveau de détail, comme les autres rapports) ou <strong>imprimé</strong>, via les deux boutons en bas de ce sous-onglet.</p>
         </div>
 
         <div class="aide-section">
