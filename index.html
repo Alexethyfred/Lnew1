@@ -11077,8 +11077,12 @@ function printAnnuelReport() {
 
 /* ── Rapport "Détail par évangéliste" (Analytics → Évangélistes) ──
    Réutilise la période sélectionnée dans le sous-onglet (anl-ev-period)
-   et la même logique de calcul que renderAnlEvangelistes(). */
-function _buildEvangelistesRapportHTML(detaille) {
+   et la même logique de calcul que renderAnlEvangelistes().
+   Deux constructeurs séparés : l'un pour la fenêtre d'impression
+   (classes CSS définies dans _openPrintWindow), l'autre pour l'email
+   (tout en styles inline — un email ne charge aucune feuille de style
+   externe, il faut donc le même procédé que _buildWeeklyHTML). */
+function _calcEvangelistesRapportData() {
   const selPeriod = document.getElementById('anl-ev-period');
   const days = parseInt(selPeriod?.value || 30);
   const periodLabel = { '7': '7 derniers jours', '30': '30 derniers jours', '90': '3 derniers mois', '0': 'Tout le temps' }[String(days)] || '30 derniers jours';
@@ -11092,12 +11096,7 @@ function _buildEvangelistesRapportHTML(detaille) {
   });
   const evActifs = (S.evs || []).filter(e => e.actif).slice().sort((a, b) => a.nom.localeCompare(b.nom));
 
-  const totFiches = fiches.length;
-  const totActs = acts.length;
-  const totAppels = acts.filter(a => a.type === 'appel').length;
-  const totVisites = acts.filter(a => a.type === 'visite').length;
-
-  const rows = evActifs.map(e => {
+  const donnees = evActifs.map(e => {
     const ef = fiches.filter(f => f.evangelisteId === e.id).length;
     const eVis = fiches.filter(f => f.evangelisteId === e.id && f.statut === 'visite').length;
     const ea = acts.filter(a => a.evangelisteId === e.id || a.parId === e.id).length;
@@ -11106,10 +11105,26 @@ function _buildEvangelistesRapportHTML(detaille) {
     const eVisites = acts.filter(a => (a.evangelisteId === e.id || a.parId === e.id) && a.type === 'visite').length;
     const eMsgs = acts.filter(a => (a.evangelisteId === e.id || a.parId === e.id) && a.type === 'message').length;
     const taux = ef > 0 ? Math.round(eVis / ef * 100) : 0;
-    return detaille
-      ? `<tr><td>${e.nom}</td><td>${e.equipe || '—'}</td><td style="text-align:center;">${ef}</td><td style="text-align:center;">${eVis}</td><td style="text-align:center;">${taux}%</td><td style="text-align:center;">${eAppels}</td><td style="text-align:center;">${eVisites}</td><td style="text-align:center;">${eMsgs}</td><td style="text-align:center;color:${eRet > 0 ? '#C0392B' : '#1A7A3A'};font-weight:700;">${eRet}</td></tr>`
-      : `<tr><td>${e.nom}</td><td style="text-align:center;">${ef}</td><td style="text-align:center;">${eVis}</td><td style="text-align:center;font-weight:700;color:${taux >= 70 ? 'green' : taux >= 40 ? 'orange' : '#C0392B'};">${taux}%</td><td style="text-align:center;">${ea}</td></tr>`;
-  }).join('');
+    return { e, ef, eVis, ea, eRet, eAppels, eVisites, eMsgs, taux };
+  });
+
+  return {
+    periodLabel, now, evActifs, donnees,
+    totFiches: fiches.length,
+    totActs: acts.length,
+    totAppels: acts.filter(a => a.type === 'appel').length,
+    totVisites: acts.filter(a => a.type === 'visite').length,
+    totRetards: donnees.reduce((s, d) => s + d.eRet, 0),
+  };
+}
+
+function _buildEvangelistesPrintHTML(detaille) {
+  const { periodLabel, now, evActifs, donnees, totFiches, totActs, totAppels, totVisites } = _calcEvangelistesRapportData();
+
+  const rows = donnees.map(({ e, ef, eVis, ea, eRet, eAppels, eVisites, eMsgs, taux }) => detaille
+    ? `<tr><td>${e.nom}</td><td>${e.equipe || '—'}</td><td style="text-align:center;">${ef}</td><td style="text-align:center;">${eVis}</td><td style="text-align:center;">${taux}%</td><td style="text-align:center;">${eAppels}</td><td style="text-align:center;">${eVisites}</td><td style="text-align:center;">${eMsgs}</td><td style="text-align:center;color:${eRet > 0 ? '#C0392B' : '#1A7A3A'};font-weight:700;">${eRet}</td></tr>`
+    : `<tr><td>${e.nom}</td><td style="text-align:center;">${ef}</td><td style="text-align:center;">${eVis}</td><td style="text-align:center;font-weight:700;color:${taux >= 70 ? 'green' : taux >= 40 ? 'orange' : '#C0392B'};">${taux}%</td><td style="text-align:center;">${ea}</td></tr>`
+  ).join('');
 
   const tableHeaders = detaille
     ? `<tr><th>Évangéliste</th><th>Zone</th><th>Fiches</th><th>Visitées</th><th>Taux</th><th>📞 Appels</th><th>🚶 Visites</th><th>💬 Msgs</th><th>⚠️ Retards</th></tr>`
@@ -11131,13 +11146,138 @@ function _buildEvangelistesRapportHTML(detaille) {
     <div class="footer">Église Évangélique au Maroc — Paroisse de Fès · Commission Témoignage · Présenté sans classement ni comparaison entre personnes.</div>`;
 }
 
+/* Version email : mêmes données, mais mise en page 100% styles inline
+   (dégradé, cartes KPI, tableau habillé) — un client mail ignore les
+   classes CSS et les balises <style>, contrairement au navigateur. */
+function _buildEvangelistesEmailHTML(detaille) {
+  const { periodLabel, now, evActifs, donnees, totFiches, totActs, totAppels, totVisites, totRetards } = _calcEvangelistesRapportData();
+  const dateGenStr = now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  const rows = donnees.map(({ e, ef, eVis, ea, eRet, eAppels, eVisites, eMsgs, taux }, i) => {
+    const bg = i % 2 === 0 ? '#FBF7F7' : '#fff';
+    const tauxColor = taux >= 70 ? '#1A7A3A' : taux >= 40 ? '#B86A00' : '#C0392B';
+    const retColor = eRet > 0 ? '#C0392B' : '#1A7A3A';
+    return detaille
+      ? `<tr style="background:${bg};">
+        <td style="padding:8px 10px;font-size:12px;font-weight:600;color:#1E0A0A;border-bottom:1px solid rgba(123,17,17,.07);">${e.nom}</td>
+        <td style="padding:8px 6px;font-size:11px;text-align:center;color:#6B3A3A;border-bottom:1px solid rgba(123,17,17,.07);">${e.equipe || '—'}</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center;color:#7B1111;font-weight:700;border-bottom:1px solid rgba(123,17,17,.07);">${ef}</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center;color:#1A7A3A;font-weight:700;border-bottom:1px solid rgba(123,17,17,.07);">${eVis}</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center;color:${tauxColor};font-weight:700;border-bottom:1px solid rgba(123,17,17,.07);">${taux}%</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center;color:#1E50A0;font-weight:700;border-bottom:1px solid rgba(123,17,17,.07);">${eAppels}</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center;color:#1A7A3A;font-weight:700;border-bottom:1px solid rgba(123,17,17,.07);">${eVisites}</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center;color:#B86A00;font-weight:700;border-bottom:1px solid rgba(123,17,17,.07);">${eMsgs}</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center;color:${retColor};font-weight:700;border-bottom:1px solid rgba(123,17,17,.07);">${eRet}</td>
+      </tr>`
+      : `<tr style="background:${bg};">
+        <td style="padding:9px 10px;font-size:12.5px;font-weight:600;color:#1E0A0A;border-bottom:1px solid rgba(123,17,17,.07);">${e.nom}</td>
+        <td style="padding:9px 6px;font-size:12.5px;text-align:center;color:#7B1111;font-weight:700;border-bottom:1px solid rgba(123,17,17,.07);">${ef}</td>
+        <td style="padding:9px 6px;font-size:12.5px;text-align:center;color:#1A7A3A;font-weight:700;border-bottom:1px solid rgba(123,17,17,.07);">${eVis}</td>
+        <td style="padding:9px 6px;font-size:12.5px;text-align:center;color:${tauxColor};font-weight:700;border-bottom:1px solid rgba(123,17,17,.07);">${taux}%</td>
+        <td style="padding:9px 6px;font-size:12.5px;text-align:center;color:#1E50A0;font-weight:700;border-bottom:1px solid rgba(123,17,17,.07);">${ea}</td>
+      </tr>`;
+  }).join('');
+
+  const tableHead = detaille
+    ? `<tr style="background:rgba(123,17,17,.06);">
+        <th style="padding:8px 10px;text-align:left;font-size:10px;color:#7B1111;text-transform:uppercase;font-weight:700;">Évangéliste</th>
+        <th style="padding:8px 6px;text-align:center;font-size:10px;color:#7B1111;text-transform:uppercase;font-weight:700;">Zone</th>
+        <th style="padding:8px 6px;text-align:center;font-size:10px;color:#7B1111;text-transform:uppercase;font-weight:700;">Fiches</th>
+        <th style="padding:8px 6px;text-align:center;font-size:10px;color:#7B1111;text-transform:uppercase;font-weight:700;">Visitées</th>
+        <th style="padding:8px 6px;text-align:center;font-size:10px;color:#7B1111;text-transform:uppercase;font-weight:700;">Taux</th>
+        <th style="padding:8px 6px;text-align:center;font-size:10px;color:#1E50A0;text-transform:uppercase;font-weight:700;">📞</th>
+        <th style="padding:8px 6px;text-align:center;font-size:10px;color:#1A7A3A;text-transform:uppercase;font-weight:700;">🚶</th>
+        <th style="padding:8px 6px;text-align:center;font-size:10px;color:#B86A00;text-transform:uppercase;font-weight:700;">💬</th>
+        <th style="padding:8px 6px;text-align:center;font-size:10px;color:#C0392B;text-transform:uppercase;font-weight:700;">⚠️</th>
+      </tr>`
+    : `<tr style="background:rgba(123,17,17,.06);">
+        <th style="padding:8px 10px;text-align:left;font-size:10px;color:#7B1111;text-transform:uppercase;font-weight:700;">Évangéliste</th>
+        <th style="padding:8px 6px;text-align:center;font-size:10px;color:#7B1111;text-transform:uppercase;font-weight:700;">Fiches</th>
+        <th style="padding:8px 6px;text-align:center;font-size:10px;color:#7B1111;text-transform:uppercase;font-weight:700;">Visitées</th>
+        <th style="padding:8px 6px;text-align:center;font-size:10px;color:#7B1111;text-transform:uppercase;font-weight:700;">Taux</th>
+        <th style="padding:8px 6px;text-align:center;font-size:10px;color:#1E50A0;text-transform:uppercase;font-weight:700;">Activités</th>
+      </tr>`;
+
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#F5ECEC;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F5ECEC;padding:32px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 8px 40px rgba(123,17,17,0.13);">
+
+  <!-- HEADER -->
+  <tr><td style="background:linear-gradient(135deg,#7B1111,#C0392B);padding:36px 32px 28px;text-align:center;">
+    <div style="font-size:11px;color:rgba(255,255,255,.65);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;">Église Évangélique au Maroc</div>
+    <div style="font-size:26px;font-weight:800;color:#fff;letter-spacing:-.3px;">Commission Témoignage</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:4px;">Paroisse de Fès</div>
+    <div style="margin-top:18px;display:inline-block;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);border-radius:40px;padding:7px 22px;">
+      <span style="color:#fff;font-size:13px;font-weight:700;">👥 Détail par évangéliste</span>
+    </div>
+    <div style="color:rgba(255,255,255,.7);font-size:12px;margin-top:10px;">Période : ${periodLabel}</div>
+  </td></tr>
+
+  <!-- META -->
+  <tr><td style="background:#FBF7F7;padding:12px 32px;border-bottom:1px solid rgba(123,17,17,0.10);">
+    <p style="margin:0;font-size:12px;color:#6B3A3A;text-align:center;">Généré le ${dateGenStr}</p>
+  </td></tr>
+
+  <tr><td style="padding:28px 32px 0;">
+
+    <!-- KPIs -->
+    <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#7B1111;margin-bottom:14px;">
+      <span style="display:inline-block;width:3px;height:14px;background:#A01818;border-radius:2px;vertical-align:middle;margin-right:6px;"></span>Synthèse
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="8" style="margin-bottom:24px;">
+      <tr>
+        <td style="background:#FBF7F7;border:1px solid rgba(123,17,17,.12);border-radius:10px;padding:12px;text-align:center;">
+          <div style="font-size:22px;font-weight:800;color:#7B1111;">${evActifs.length}</div>
+          <div style="font-size:10px;color:#6B3A3A;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Évangélistes</div>
+        </td>
+        <td style="background:#EEF4FF;border:1px solid rgba(30,80,160,.15);border-radius:10px;padding:12px;text-align:center;">
+          <div style="font-size:22px;font-weight:800;color:#1E50A0;">${totFiches}</div>
+          <div style="font-size:10px;color:#6B3A3A;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Fiches totales</div>
+        </td>
+        <td style="background:#EDFAF1;border:1px solid rgba(26,122,58,.18);border-radius:10px;padding:12px;text-align:center;">
+          <div style="font-size:22px;font-weight:800;color:#1A7A3A;">${totActs}</div>
+          <div style="font-size:10px;color:#6B3A3A;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Activités</div>
+        </td>
+        <td style="background:${totRetards > 0 ? '#FDEEEE' : '#EDFAF1'};border:1px solid ${totRetards > 0 ? 'rgba(192,57,43,.2)' : 'rgba(26,122,58,.18)'};border-radius:10px;padding:12px;text-align:center;">
+          <div style="font-size:22px;font-weight:800;color:${totRetards > 0 ? '#C0392B' : '#1A7A3A'};">${totRetards}</div>
+          <div style="font-size:10px;color:#6B3A3A;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Retards</div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- TABLEAU DÉTAIL -->
+    <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#7B1111;margin-bottom:12px;">
+      <span style="display:inline-block;width:3px;height:14px;background:#A01818;border-radius:2px;vertical-align:middle;margin-right:6px;"></span>Détail par évangéliste — ordre alphabétique, sans classement
+    </div>
+    <div style="overflow-x:auto;margin-bottom:24px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid rgba(123,17,17,.15);border-radius:12px;overflow:hidden;">
+      ${tableHead}
+      ${rows}
+    </table>
+    </div>
+
+  </td></tr>
+
+  <!-- FOOTER -->
+  <tr><td style="background:linear-gradient(135deg,#7B1111,#A01818);padding:22px 32px;text-align:center;">
+    <div style="color:rgba(255,255,255,.9);font-size:13px;font-weight:700;">Église Évangélique au Maroc — Paroisse de Fès</div>
+    <div style="color:rgba(255,255,255,.6);font-size:11px;margin-top:4px;">Commission Témoignage · Rapport confidentiel à usage interne</div>
+  </td></tr>
+
+</table>
+</td></tr></table>
+</body></html>`;
+}
+
 function printEvangelistesReport() {
-  _openPrintWindow(_buildEvangelistesRapportHTML(true), 'Détail par évangéliste');
+  _openPrintWindow(_buildEvangelistesPrintHTML(true), 'Détail par évangéliste');
 }
 
 async function _envoyerEvangelistesReport(email, mode) {
   const detaille = mode === 'detaille';
-  const htmlContent = _buildEvangelistesRapportHTML(detaille);
+  const htmlContent = _buildEvangelistesEmailHTML(detaille);
   const evActifs = (S.evs || []).filter(e => e.actif);
   const sujet = `👥 Détail par évangéliste — ${detaille ? 'Détaillé' : 'Grandes lignes'}`;
   const texteFallback = `Détail par évangéliste\n\nÉvangélistes actifs : ${evActifs.length}\n\nÉglise Évangélique au Maroc — Paroisse de Fès`;
