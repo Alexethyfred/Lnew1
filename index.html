@@ -1993,7 +1993,18 @@ body .animate, body .spinner, body [class*="anim"] {
           <div class="edit-field"><label>Lieu</label><input type="text" id="sc-lieu" placeholder="ex: Zone Bensouda" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
         </div>
         <div class="edit-field" style="margin-top:10px;"><label>Description (optionnel)</label><textarea id="sc-desc" rows="2" placeholder="Détails, point de rendez-vous, horaire…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);resize:vertical;"></textarea></div>
-        <button class="btn btn-primary btn-full" id="sc-save-btn" onclick="creerSortieCollective()" style="margin-top:12px;">📢 Publier et notifier tous les évangélistes</button>
+        <div class="edit-field" style="margin-top:10px;">
+          <label style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Destinataires</span>
+            <span style="display:flex;gap:10px;font-weight:400;font-size:11.5px;">
+              <a href="javascript:void(0)" onclick="toggleTousSortieDestinataires(true)">tout cocher</a>
+              <a href="javascript:void(0)" onclick="toggleTousSortieDestinataires(false)">tout décocher</a>
+            </span>
+          </label>
+          <div id="sc-destinataires" style="max-height:170px;overflow:auto;border:1.5px solid var(--bo);border-radius:8px;padding:8px 10px;background:var(--surface);display:flex;flex-direction:column;gap:4px;"></div>
+          <div style="font-size:11px;color:var(--mu);margin-top:4px;">Par défaut, tous les évangélistes actifs sont cochés. Décochez pour cibler une sortie zonale par exemple — vous pourrez encore modifier/retirer chaque message dans la file d'attente avant l'envoi.</div>
+        </div>
+        <button class="btn btn-primary btn-full" id="sc-save-btn" onclick="creerSortieCollective()" style="margin-top:12px;">📢 Publier et notifier les évangélistes sélectionnés</button>
       </div>
 
       <!-- Liste unique : réponses + compte-rendu lié -->
@@ -2029,8 +2040,15 @@ body .animate, body .spinner, body [class*="anim"] {
             <option value="__tous__">👥 Tous les évangélistes actifs</option>
           </select>
         </div>
+        <div class="edit-field" style="margin-top:10px;"><label>Objet (facultatif — affiché comme titre dans l'email et la notification)</label>
+          <input type="text" id="comm-manuel-objet" placeholder="ex: Réunion de prière, Point sur le mois…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
+        </div>
         <div class="edit-field" style="margin-top:10px;"><label>Message</label>
           <textarea id="comm-manuel-texte" rows="4" placeholder="Votre message…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);resize:vertical;"></textarea>
+        </div>
+        <div class="edit-field" style="margin-top:10px;"><label>Programmer l'envoi pour plus tard (facultatif)</label>
+          <input type="datetime-local" id="comm-manuel-programme" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
+          <div style="font-size:11px;color:var(--mu);margin-top:4px;">Laissez vide pour l'ajouter immédiatement à la file. Sinon, le message reste caché dans un onglet "Programmés" jusqu'à cette date — vous garderez toujours la main pour cliquer "Envoyer" à ce moment-là.</div>
         </div>
         <button class="btn btn-primary btn-full" id="comm-manuel-btn" onclick="envoyerCommunicationManuelle()" style="margin-top:12px;">➕ Ajouter à la file d'envoi</button>
       </div>
@@ -5879,16 +5897,36 @@ function initSortiesCollectives() {
   });
 }
 
+function populateSortieDestinataires() {
+  const el = document.getElementById('sc-destinataires');
+  if (!el) return;
+  const actifs = (S.evs || []).filter(e => e.actif !== false);
+  if (!actifs.length) { el.innerHTML = '<div style="font-size:12px;color:var(--mu);">Aucun évangéliste actif</div>'; return; }
+  // Ne pas écraser les cases si déjà rendues avec les mêmes personnes (évite de perdre une désélection en cours)
+  const idsActuels = Array.from(el.querySelectorAll('input[type=checkbox]')).map(i => i.value).sort().join(',');
+  if (idsActuels === actifs.map(e => e.id).sort().join(',')) return;
+  el.innerHTML = actifs.map(e => `
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+      <input type="checkbox" value="${e.id}" checked> ${_esc(e.nom)}${e.email ? '' : ' <span style="color:var(--mu);font-size:11px;">(⚠️ pas d\'email)</span>'}
+    </label>`).join('');
+}
+function toggleTousSortieDestinataires(checked) {
+  document.querySelectorAll('#sc-destinataires input[type=checkbox]').forEach(i => { i.checked = checked; });
+}
+
 async function creerSortieCollective() {
   const date = document.getElementById('sc-date')?.value;
   const lieu = document.getElementById('sc-lieu')?.value.trim();
   const desc = document.getElementById('sc-desc')?.value.trim();
   if (!date || !lieu) { toast('❌ Date et lieu obligatoires'); return; }
+  const cases = Array.from(document.querySelectorAll('#sc-destinataires input[type=checkbox]'));
+  const destinataires = cases.filter(c => c.checked).map(c => c.value);
+  if (cases.length && !destinataires.length) { toast('❌ Sélectionnez au moins un destinataire'); return; }
   const btn = document.getElementById('sc-save-btn');
   if (btn) btn.disabled = true;
   try {
-    await window._createSortieCollective({ date, lieu, description: desc || null, creePar: S.respNom || 'Responsable' });
-    toast('✅ Sortie collective publiée, les évangélistes vont être notifiés');
+    await window._createSortieCollective({ date, lieu, description: desc || null, creePar: S.respNom || 'Responsable', destinataires: destinataires.length ? destinataires : null });
+    toast('✅ Sortie collective publiée, les évangélistes sélectionnés vont être notifiés');
     document.getElementById('sc-date').value = '';
     document.getElementById('sc-lieu').value = '';
     document.getElementById('sc-desc').value = '';
@@ -6067,7 +6105,8 @@ function initCommunications() {
       S.commQueue = list;
       renderCommQueue();
       const badge = document.getElementById('comm-badge');
-      if (badge) badge.style.display = list.length ? 'inline-block' : 'none';
+      const actionnables = list.filter(c => !c.programmePour || new Date(c.programmePour).getTime() <= Date.now());
+      if (badge) badge.style.display = actionnables.length ? 'inline-block' : 'none';
     });
   }
   if (!S.unsubCommHisto) {
@@ -6096,10 +6135,25 @@ const _COMM_BADGES = {
 function renderCommQueue() {
   const el = document.getElementById('comm-queue-list');
   if (!el) return;
-  const list = S.commQueue || [];
+  const now = Date.now();
+  const listAll = S.commQueue || [];
+  const list = listAll.filter(c => !c.programmePour || new Date(c.programmePour).getTime() <= now);
+  const programmes = listAll.filter(c => c.programmePour && new Date(c.programmePour).getTime() > now)
+    .sort((a, b) => new Date(a.programmePour) - new Date(b.programmePour));
+
+  const blocProgrammes = programmes.length ? `
+    <div style="background:var(--bg);border:1.5px dashed var(--bo);border-radius:14px;padding:14px 16px;margin-bottom:14px;">
+      <div style="font-weight:800;font-size:13px;margin-bottom:8px;">📅 Programmés (${programmes.length}) — pas encore actionnables</div>
+      ${programmes.map(c => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed var(--bo);font-size:12.5px;">
+          <span>${c.objet ? '✍️ ' + _esc(c.objet) : (_COMM_TYPE_LABELS[c.type] || '')} — ${_esc(c.evNom || '')} <span style="color:var(--mu);">· dispo. le ${new Date(c.programmePour).toLocaleString('fr-FR', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span></span>
+          <button class="btn-icon" title="Supprimer" onclick="supprimerCommunicationDef('${c.id}')">🗑️</button>
+        </div>`).join('')}
+    </div>` : '';
+
   if (!list.length) {
     S._commQueueSel = new Set();
-    el.innerHTML = '<div class="empty-state"><div class="ico">✅</div><p>Aucune communication en attente, tout est à jour</p></div>';
+    el.innerHTML = blocProgrammes + (programmes.length ? '' : '<div class="empty-state"><div class="ico">✅</div><p>Aucune communication en attente, tout est à jour</p></div>');
     return;
   }
   if (!S._commQueueSel) S._commQueueSel = new Set();
@@ -6122,10 +6176,14 @@ function renderCommQueue() {
       <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mu);cursor:pointer;">
         <input type="checkbox" onchange="toggleToutCommQueue(this.checked)" ${nbSel === list.length ? 'checked' : ''}> Tout sélectionner
       </label>
-      <button class="btn btn-outline" style="${nbSel ? '' : 'opacity:.5;pointer-events:none;'}" onclick="supprimerSelectionCommQueue()">🗑️ Supprimer la sélection (${nbSel})</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="comm-bulk-email-btn" style="${nbSel ? '' : 'opacity:.5;pointer-events:none;'}" onclick="envoyerSelectionCommQueue('email')">📧 Envoyer les emails sélectionnés (${nbSel})</button>
+        <button class="btn btn-primary" id="comm-bulk-notif-btn" style="${nbSel ? '' : 'opacity:.5;pointer-events:none;'}" onclick="envoyerSelectionCommQueue('notif')">🔔 Envoyer les notifs sélectionnées (${nbSel})</button>
+        <button class="btn btn-outline" style="${nbSel ? '' : 'opacity:.5;pointer-events:none;'}" onclick="supprimerSelectionCommQueue()">🗑️ Supprimer la sélection (${nbSel})</button>
+      </div>
     </div>`;
 
-  el.innerHTML = barre + Object.values(parEv).map(grp => `
+  el.innerHTML = blocProgrammes + barre + Object.values(parEv).map(grp => `
     <div style="background:var(--surface);border:1.5px solid var(--bo);border-radius:14px;padding:14px 16px;margin-bottom:14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--bo);padding-bottom:8px;">
         <div style="font-weight:800;font-size:14px;">👤 ${_esc(grp.evNom)}</div>
@@ -6135,7 +6193,7 @@ function renderCommQueue() {
         <div style="margin-bottom:14px;padding-bottom:14px;${grp.items.indexOf(c) < grp.items.length - 1 ? 'border-bottom:1px dashed var(--bo);' : ''}">
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--c1);margin-bottom:6px;cursor:pointer;">
             <input type="checkbox" onchange="toggleSelectionCommQueue('${c.id}', this.checked)" ${S._commQueueSel.has(c.id) ? 'checked' : ''}>
-            ${_COMM_TYPE_LABELS[c.type] || '📧 Rappel'}
+            ${c.objet ? '✍️ ' + _esc(c.objet) : (_COMM_TYPE_LABELS[c.type] || '📧 Rappel')}
           </label>
           <textarea id="comm-txt-${c.id}" rows="6" style="width:100%;font-family:'DM Sans',sans-serif;font-size:13px;padding:10px;border:1.5px solid var(--bo);border-radius:8px;background:var(--bg);color:var(--tx);resize:vertical;white-space:pre-wrap;">${_esc(c.contenu || '')}</textarea>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
@@ -6161,6 +6219,38 @@ function toggleToutCommQueue(checked) {
   S._commQueueSel = checked ? new Set((S.commQueue || []).map(c => c.id)) : new Set();
   renderCommQueue();
 }
+/* Envoi groupé : réutilise envoyerCommunicationEmail/Notif un par un (même
+   logique, même trace en base) avec une petite pause entre chaque envoi
+   pour rester dans les limites du plan gratuit EmailJS. Les envois déjà
+   faits ou sans email sont sautés silencieusement — la validation reste
+   manuelle (c'est la responsable qui a coché et cliqué), seul le nombre
+   de clics répétés disparaît. */
+async function envoyerSelectionCommQueue(canal) {
+  const ids = Array.from(S._commQueueSel || []);
+  if (!ids.length) return;
+  const label = canal === 'email' ? 'email(s)' : 'notification(s)';
+  const btnId = canal === 'email' ? 'comm-bulk-email-btn' : 'comm-bulk-notif-btn';
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.disabled = true; btn.style.pointerEvents = 'none'; btn.style.opacity = '.6'; }
+  let ok = 0, sautes = 0, echecs = 0;
+  for (const id of ids) {
+    const c = (S.commQueue || []).find(x => x.id === id);
+    if (!c) { sautes++; continue; }
+    if (canal === 'email') {
+      if (c.emailEnvoye || !c.evEmail) { sautes++; continue; }
+      try { await envoyerCommunicationEmail(id, true); ok++; } catch (e) { echecs++; }
+      await new Promise(r => setTimeout(r, 600)); // pause anti-quota EmailJS
+    } else {
+      if (c.notifEnvoyee) { sautes++; continue; }
+      try { await envoyerCommunicationNotif(id, true); ok++; } catch (e) { echecs++; }
+      await new Promise(r => setTimeout(r, 150));
+    }
+  }
+  S._commQueueSel = new Set();
+  renderCommQueue();
+  toast(`✅ ${ok} ${label} envoyé(s)` + (sautes ? ` · ${sautes} déjà fait(s)/ignoré(s)` : '') + (echecs ? ` · ❌ ${echecs} échec(s)` : ''));
+}
+
 async function supprimerSelectionCommQueue() {
   const ids = Array.from(S._commQueueSel || []);
   if (!ids.length) return;
@@ -6205,6 +6295,7 @@ function renderCommHistorique() {
           <strong>${_COMM_TYPE_LABELS[c.type] || ''} — ${_esc(c.evNom || '')}</strong>
         </label>
         <div style="display:flex;align-items:center;gap:10px;">
+          ${c.pushDemande ? `<span style="font-size:11px;color:var(--mu);" title="Bannière téléphone (livrée par le script planifié)">${!c.pushEnvoye ? '📱 push en attente' : (c.pushLivre ? '📱 push livré' : '📱 push non livré (aucun abonnement actif)')}</span>` : ''}
           <span style="font-weight:700;color:${c.statut === 'envoye' ? 'var(--ok)' : 'var(--mu)'};">${c.statut === 'envoye' ? '✅ Envoyé' : '— Ignoré'}</span>
           <button class="btn-icon" title="Renvoyer (remet dans la file, modifiable)" onclick="remettreEnAttenteCommunication('${c.id}')">🔁</button>
           <button class="btn-icon" title="Supprimer définitivement" onclick="supprimerCommunicationDef('${c.id}')">🗑️</button>
@@ -6244,13 +6335,13 @@ async function _finaliserSiComplet(id, c) {
   }
 }
 
-async function envoyerCommunicationEmail(id) {
+async function envoyerCommunicationEmail(id, silencieux) {
   const c = (S.commQueue || []).find(x => x.id === id);
   if (!c) return;
   const contenu = document.getElementById(`comm-txt-${id}`)?.value.trim() || c.contenu;
-  if (!c.evEmail) { toast('❌ Aucun email pour cet évangéliste, ajoutez-en un dans sa fiche évangéliste'); return; }
+  if (!c.evEmail) { if (!silencieux) toast('❌ Aucun email pour cet évangéliste, ajoutez-en un dans sa fiche évangéliste'); return; }
   try {
-    const badge   = _COMM_BADGES[c.type] || '📧 Communication';
+    const badge   = c.objet ? `✍️ ${c.objet}` : (_COMM_BADGES[c.type] || '📧 Communication');
     const htmlMsg = _buildCommunicationHTML(badge, contenu);
     // Réutilise le template "rapport" (HTML riche) — même charte graphique
     // que les rapports envoyés, plutôt que le petit template court.
@@ -6264,10 +6355,11 @@ async function envoyerCommunicationEmail(id) {
     }, 'communication-manuelle');
     await window._upsertCommunication(id, { contenu, emailEnvoye: true, emailEnvoyeAt: firebase.firestore.FieldValue.serverTimestamp() });
     await _finaliserSiComplet(id, { ...c, emailEnvoye: true });
-    toast('✅ Email envoyé à ' + c.evNom);
+    if (!silencieux) toast('✅ Email envoyé à ' + c.evNom);
   } catch (e) {
     console.error(e);
-    toast('❌ Erreur lors de l\'envoi de l\'email');
+    if (!silencieux) toast('❌ Erreur lors de l\'envoi de l\'email');
+    throw e;
   }
 }
 
@@ -6276,11 +6368,11 @@ async function envoyerCommunicationEmail(id) {
    sera délivrée par le script automatique au prochain passage (quelques
    minutes) — un vrai push nécessite une clé serveur que le navigateur n'a
    pas, d'où ce léger délai, inévitable avec une architecture 100% gratuite. */
-async function envoyerCommunicationNotif(id) {
+async function envoyerCommunicationNotif(id, silencieux) {
   const c = (S.commQueue || []).find(x => x.id === id);
   if (!c) return;
   try {
-    await window._pushNotif(c.evId, `${_COMM_BADGES[c.type] || '📧'} — voir l'app pour le détail.`, c.type);
+    await window._pushNotif(c.evId, `${c.objet ? '✍️ ' + c.objet : (_COMM_BADGES[c.type] || '📧')} — voir l'app pour le détail.`, c.type);
     await window._upsertCommunication(id, {
       notifEnvoyee: true,
       notifEnvoyeeAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -6288,10 +6380,11 @@ async function envoyerCommunicationNotif(id) {
       pushDemandeAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await _finaliserSiComplet(id, { ...c, notifEnvoyee: true });
-    toast('🔔 Notification envoyée (bannière téléphone dans quelques minutes)');
+    if (!silencieux) toast('🔔 Notification envoyée (bannière téléphone dans quelques minutes)');
   } catch (e) {
     console.error(e);
-    toast('❌ Erreur lors de l\'envoi de la notification');
+    if (!silencieux) toast('❌ Erreur lors de l\'envoi de la notification');
+    throw e;
   }
 }
 
@@ -6344,12 +6437,15 @@ function populateCommManuelSelect() {
 async function envoyerCommunicationManuelle() {
   const sel     = document.getElementById('comm-manuel-dest');
   const texte   = document.getElementById('comm-manuel-texte')?.value.trim();
+  const objet   = document.getElementById('comm-manuel-objet')?.value.trim();
+  const prog    = document.getElementById('comm-manuel-programme')?.value; // datetime-local, vide si immédiat
   const btn     = document.getElementById('comm-manuel-btn');
   if (!texte) { toast('⚠️ Écrivez un message avant d\'ajouter à la file'); return; }
   const destId  = sel?.value;
   const actifs  = (S.evs || []).filter(e => e.actif !== false && e.email);
   const cibles  = destId === '__tous__' ? actifs : actifs.filter(e => e.id === destId);
   if (!cibles.length) { toast('❌ Aucun destinataire valide (email manquant ?)'); return; }
+  const programmePour = prog ? new Date(prog).toISOString() : null;
 
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Ajout…'; }
   try {
@@ -6362,6 +6458,8 @@ async function envoyerCommunicationManuelle() {
         evEmail:       ev.email,
         cle:           `manuel_${ts}`,
         contenu:       texte,
+        objet:         objet || null,
+        programmePour,
         statut:        'attente',
         emailEnvoye:   false,
         notifEnvoyee:  false,
@@ -6369,8 +6467,12 @@ async function envoyerCommunicationManuelle() {
         createdAt:     firebase.firestore.FieldValue.serverTimestamp()
       });
     }
-    toast(`✅ Message ajouté à la file pour ${cibles.length} évangéliste(s)`);
+    toast(programmePour
+      ? `📅 Message programmé pour ${cibles.length} évangéliste(s) — visible dans "Programmés" jusqu'à la date choisie`
+      : `✅ Message ajouté à la file pour ${cibles.length} évangéliste(s)`);
     document.getElementById('comm-manuel-texte').value = '';
+    document.getElementById('comm-manuel-objet').value = '';
+    document.getElementById('comm-manuel-programme').value = '';
   } catch (e) {
     console.error(e);
     toast('❌ Erreur ajout à la file');
@@ -6637,7 +6739,7 @@ function switchTab(name, btn) {
     if (badge) badge.style.display = 'none';
   }
   if (name === 'equipes') { renderEquipes(); renderZoneChips(); }
-  if (name === 'sorties') { initSorties(); populateSortieEvWrap(); initSortiesCollectives(); }
+  if (name === 'sorties') { initSorties(); populateSortieEvWrap(); initSortiesCollectives(); populateSortieDestinataires(); }
   if (name === 'communications') { initCommunications(); }
 }
 
