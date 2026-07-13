@@ -2477,14 +2477,26 @@ body .animate, body .spinner, body [class*="anim"] {
     <div id="ev-tab-rappels" class="ev-tabcontent" style="display:none;">
 
       <!-- Disponibilité pour accompagner une visite (zone) -->
-      <div id="ev-dispo-card" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:14px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
-        <div>
-          <div style="font-size:12px;font-weight:700;color:var(--c1);text-transform:uppercase;letter-spacing:.06em;">🤝 Disponible pour accompagner une visite</div>
-          <div style="font-size:11.5px;color:var(--mu);margin-top:2px;line-height:1.4;">Visible par les évangélistes de votre zone pour organiser les visites mensuelles avec accompagnateur.</div>
+      <div id="ev-dispo-card" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:14px;padding:14px 16px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:var(--c1);text-transform:uppercase;letter-spacing:.06em;">🤝 Disponible pour accompagner une visite</div>
+            <div style="font-size:11.5px;color:var(--mu);margin-top:2px;line-height:1.4;">Visible par les évangélistes de votre zone pour organiser les visites mensuelles avec accompagnateur.</div>
+          </div>
+          <button type="button" id="ev-dispo-btn" onclick="toggleMaDisponibilite()" style="position:relative;display:inline-block;width:46px;height:26px;flex-shrink:0;border:none;padding:0;border-radius:26px;background:var(--bo);cursor:pointer;transition:.2s;">
+            <span id="ev-dispo-knob" style="position:absolute;left:3px;top:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.3);pointer-events:none;"></span>
+          </button>
         </div>
-        <button type="button" id="ev-dispo-btn" onclick="toggleMaDisponibilite()" style="position:relative;display:inline-block;width:46px;height:26px;flex-shrink:0;border:none;padding:0;border-radius:26px;background:var(--bo);cursor:pointer;transition:.2s;">
-          <span id="ev-dispo-knob" style="position:absolute;left:3px;top:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.3);pointer-events:none;"></span>
-        </button>
+        <div id="ev-dispo-status" style="display:none;font-size:11.5px;color:var(--mu);margin-top:10px;padding-top:10px;border-top:1px dashed var(--bo);line-height:1.5;"></div>
+        <div id="ev-dispo-form" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--bo);">
+          <div style="font-size:11.5px;color:var(--mu);margin-bottom:8px;">Pour désactiver, précisez pourquoi et jusqu'à quand — la disponibilité se réactivera automatiquement à cette date.</div>
+          <div class="edit-field"><label>Motif de l'indisponibilité</label><input type="text" id="dispo-motif" placeholder="ex: examens, voyage…" style="background:var(--bg);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
+          <div class="edit-field" style="margin-top:8px;"><label>Disponible à nouveau à partir du</label><input type="date" id="dispo-date" style="background:var(--bg);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button type="button" class="btn btn-primary" style="flex:1;" onclick="confirmerIndisponibilite()">✅ Confirmer</button>
+            <button type="button" class="btn" style="flex:1;" onclick="annulerIndisponibilite()">Annuler</button>
+          </div>
+        </div>
       </div>
 
       <!-- Notifications téléphone -->
@@ -4621,7 +4633,10 @@ function renderEvList() {
 
     /* Badge disponibilité pour accompagner une visite */
     const dispoBadge = e.disponible
-      ? `<span class="badge" style="background:var(--ok-bg);color:var(--ok);" title="S'est déclaré disponible pour accompagner une visite">🤝 Disponible</span>` : '';
+      ? `<span class="badge" style="background:var(--ok-bg);color:var(--ok);" title="S'est déclaré disponible pour accompagner une visite">🤝 Disponible</span>`
+      : (e.indispoJusquau
+        ? `<span class="badge" style="background:rgba(184,106,0,0.1);color:#B86A00;" title="${_esc((e.indispoMotif ? e.indispoMotif + ' — ' : '') + 'retour prévu le ' + new Date(e.indispoJusquau + 'T00:00:00').toLocaleDateString('fr-FR'))}">⏸️ Indispo jusqu'au ${new Date(e.indispoJusquau + 'T00:00:00').toLocaleDateString('fr-FR', {day:'numeric', month:'short'})}</span>`
+        : '');
 
     /* Barre de performance */
     const perfBarW = e._perf;
@@ -7828,6 +7843,7 @@ Commission Témoignage — EEAM Fès`;
 function checkRappelsAutomatiques() {
   checkRappelHebdoContact();
   checkRappelVisiteMensuelle();
+  checkAutoReactivationDispo();
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -7845,7 +7861,7 @@ function switchEvTab(name, btn) {
   if (el) { el.style.display = 'block'; el.classList.add('on'); }
   if (btn) btn.classList.add('on');
   if (name === 'acts')    renderEvMyActs();
-  if (name === 'rappels') { renderEvAgenda(); renderEvRappels(); renderDispoToggle(); checkPushStatus(); renderSortiesCollectivesEv(); }
+  if (name === 'rappels') { renderEvAgenda(); renderEvRappels(); checkAutoReactivationDispo(); renderDispoToggle(); checkPushStatus(); renderSortiesCollectivesEv(); }
 }
 
 /* ── DISPONIBILITÉ POUR ACCOMPAGNER UNE VISITE ───────────── */
@@ -7854,28 +7870,58 @@ function renderDispoToggle() {
   const on = !!(ev && ev.disponible);
   const btn = document.getElementById('ev-dispo-btn');
   const knob = document.getElementById('ev-dispo-knob');
+  const statusEl = document.getElementById('ev-dispo-status');
   if (!btn) return;
   btn.style.background = on ? 'var(--ok)' : 'var(--bo)';
   btn.dataset.on = on ? '1' : '0';
   if (knob) knob.style.left = on ? '23px' : '3px';
+  if (statusEl) {
+    if (!on && ev && ev.indispoJusquau) {
+      const d = new Date(ev.indispoJusquau + 'T00:00:00').toLocaleDateString('fr-FR', {day:'numeric', month:'long'});
+      statusEl.style.display = 'block';
+      statusEl.innerHTML = `⏸️ Indisponible${ev.indispoMotif ? ' — ' + _esc(ev.indispoMotif) : ''}<br>Redevient disponible automatiquement le <strong>${d}</strong>.`;
+    } else {
+      statusEl.style.display = 'none';
+      statusEl.innerHTML = '';
+    }
+  }
 }
 
 async function toggleMaDisponibilite() {
   if (!S.evId) { toast('❌ Session non identifiée, reconnectez-vous'); return; }
   const btn = document.getElementById('ev-dispo-btn');
   const current = btn && btn.dataset.on === '1';
-  const next = !current;
+
+  if (current) {
+    // Passage à indisponible : on ouvre le formulaire (motif + date de retour obligatoires)
+    const form = document.getElementById('ev-dispo-form');
+    if (form) {
+      const showing = form.style.display !== 'none';
+      form.style.display = showing ? 'none' : 'block';
+      const dateInput = document.getElementById('dispo-date');
+      if (dateInput && !showing) {
+        const today = new Date().toISOString().split('T')[0];
+        const dans7j = new Date(Date.now() + 7*86400000).toISOString().split('T')[0];
+        dateInput.min = today;
+        if (!dateInput.value) dateInput.value = dans7j;
+      }
+    }
+    return; // rien n'est envoyé tant que "Confirmer" n'est pas cliqué
+  }
+
+  // Passage à disponible (réactivation manuelle immédiate)
   if (btn) btn.disabled = true;
   try {
     await db.collection('evangelistes').doc(S.evId).update({
-      disponible: next,
+      disponible: true,
+      indispoMotif: firebase.firestore.FieldValue.delete(),
+      indispoJusquau: firebase.firestore.FieldValue.delete(),
       disponibleMaj: firebase.firestore.FieldValue.serverTimestamp()
     });
-    // Mise à jour optimiste locale en attendant le listener temps réel
     const ev = (S.evs||[]).find(e => e.id === S.evId);
-    if (ev) ev.disponible = next;
+    if (ev) { ev.disponible = true; delete ev.indispoMotif; delete ev.indispoJusquau; }
     renderDispoToggle();
-    toast(next ? '✅ Vous êtes marqué disponible pour accompagner une visite' : '⏸️ Disponibilité désactivée');
+    toast('✅ Vous êtes marqué disponible pour accompagner une visite');
   } catch(e) {
     console.error('toggleMaDisponibilite:', e);
     toast('❌ Erreur (' + (e.code || e.message || 'inconnue') + ') — réessayez');
@@ -7883,6 +7929,58 @@ async function toggleMaDisponibilite() {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+async function confirmerIndisponibilite() {
+  const motif = document.getElementById('dispo-motif')?.value.trim();
+  const date  = document.getElementById('dispo-date')?.value;
+  if (!motif) { toast('❌ Le motif est obligatoire'); return; }
+  if (!date)  { toast('❌ La date de retour est obligatoire'); return; }
+  const today = new Date().toISOString().split('T')[0];
+  if (date <= today) { toast('❌ La date de retour doit être dans le futur'); return; }
+  try {
+    await db.collection('evangelistes').doc(S.evId).update({
+      disponible: false,
+      indispoMotif: motif,
+      indispoJusquau: date,
+      disponibleMaj: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    const ev = (S.evs||[]).find(e => e.id === S.evId);
+    if (ev) { ev.disponible = false; ev.indispoMotif = motif; ev.indispoJusquau = date; }
+    const form = document.getElementById('ev-dispo-form');
+    if (form) form.style.display = 'none';
+    document.getElementById('dispo-motif').value = '';
+    renderDispoToggle();
+    toast('⏸️ Indisponibilité enregistrée jusqu\'au ' + new Date(date + 'T00:00:00').toLocaleDateString('fr-FR'));
+  } catch(e) {
+    console.error('confirmerIndisponibilite:', e);
+    toast('❌ Erreur (' + (e.code || e.message || 'inconnue') + ') — réessayez');
+  }
+}
+
+function annulerIndisponibilite() {
+  const form = document.getElementById('ev-dispo-form');
+  if (form) form.style.display = 'none';
+}
+
+/* Réactivation automatique de la disponibilité à la date de retour indiquée */
+function checkAutoReactivationDispo() {
+  if (!S.evId) return;
+  const ev = (S.evs||[]).find(e => e.id === S.evId);
+  if (!ev || ev.disponible || !ev.indispoJusquau) return;
+  const today = new Date().toISOString().split('T')[0];
+  if (ev.indispoJusquau > today) return; // date de retour pas encore atteinte
+  db.collection('evangelistes').doc(S.evId).update({
+    disponible: true,
+    indispoMotif: firebase.firestore.FieldValue.delete(),
+    indispoJusquau: firebase.firestore.FieldValue.delete(),
+    disponibleMaj: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(() => {
+    ev.disponible = true;
+    delete ev.indispoMotif;
+    delete ev.indispoJusquau;
+    renderDispoToggle();
+  }).catch(() => {});
 }
 
 /* ── AGENDA : prochaines actions (évangéliste) ──────────── */
