@@ -17,6 +17,9 @@
  *   - "Envoyer la notification"   -> notifEnvoyee = true (in-app, instantané)
  *                                     + pushDemande = true (device, voir plus bas)
  * L'entrée ne passe à l'historique que lorsque les DEUX ont été faits.
+ * (Depuis la mise à jour communications, la responsable peut aussi
+ * sélectionner plusieurs entrées et les envoyer en groupe depuis
+ * l'app — mais chaque envoi reste un geste manuel de sa part.)
  *
  * Note sur la notification "device" (bannière téléphone) :
  * Le navigateur ne peut pas signer/envoyer un vrai push tout seul (il faut
@@ -42,6 +45,15 @@
  *
  * NB : EMAILJS_PRIVATE_KEY n'est plus utilisée par ce script — l'envoi
  * d'email se fait désormais depuis le navigateur du/de la responsable.
+ *
+ * ── FIABILITÉ (mise à jour communications) ─────────────────
+ * Avant, ce script ne déclenchait le rappel hebdo QUE le dimanche, et
+ * le rappel visite mensuelle QUE le jour exact J-7 fin de mois — sans
+ * rattrapage si le run GitHub Actions de ce jour-là échouait ou était
+ * sauté. Côté client, un rattrapage existait déjà (lundi pour l'hebdo,
+ * fenêtre de 3 jours pour la visite). Le serveur applique maintenant
+ * les mêmes fenêtres de rattrapage, pour ne plus dépendre d'un unique
+ * passage cron qui pourrait manquer sa fenêtre.
  */
 
 const admin = require('firebase-admin');
@@ -138,11 +150,17 @@ async function getRecapSemaine(evId, now) {
 
 /* ── 4. Rappel hebdo : contacter ses fiches d'ici lundi ─────
    Génère une entrée POUR CHAQUE évangéliste actif (même sans
-   fiche assignée), le dimanche, pour envoi manuel le lundi.  */
+   fiche assignée), le dimanche — avec rattrapage le lundi si le
+   run du dimanche a été manqué (même fenêtre que côté client),
+   pour envoi manuel par la responsable. */
 async function runRappelHebdo(now) {
-  const jour = now.getDay(); // 0 = dimanche
-  if (jour !== 0) return;
-  const cle = cleHebdo(now);
+  const jour = now.getDay(); // 0 = dimanche, 1 = lundi (rattrapage)
+  let refDate;
+  if (jour === 0) refDate = now;
+  else if (jour === 1) refDate = new Date(now.getTime() - 86400000);
+  else return;
+
+  const cle = cleHebdo(refDate);
   if (!cle) return; // ni 1ère semaine ni dernière semaine du mois
 
   const [evsSnap, fichesSnap] = await Promise.all([
@@ -176,13 +194,14 @@ async function runRappelHebdo(now) {
 }
 
 /* ── 5. Rappel mensuel : visite accompagnée ─────────────────
-   Génère une entrée pour chaque évangéliste ayant des fiches,
-   le 1er du mois, pour validation manuelle.                   */
+   Génère une entrée pour chaque évangéliste ayant des fiches, à
+   J-7 de la fin du mois — avec une fenêtre de rattrapage de 3
+   jours (même fenêtre que côté client) si le run du jour cible a
+   été manqué, pour validation manuelle. */
 async function runRappelVisiteMensuelle(now) {
-  // Se déclenche 1 semaine avant le dernier jour du mois (pas le 1er).
   const dernierJourMois = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const jourCible = dernierJourMois - 7;
-  if (now.getDate() !== jourCible) return;
+  if (now.getDate() < jourCible || now.getDate() > jourCible + 2) return; // fenêtre de rattrapage : 3 jours
   const cle = cleMois(now);
 
   const [evsSnap, fichesSnap] = await Promise.all([
@@ -227,13 +246,16 @@ async function runSortiesCollectives() {
   if (snap.empty) return;
 
   const evsSnap = await db.collection('evangelistes').where('actif', '!=', false).get();
-  const evs = evsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let evs = evsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
   for (const doc of snap.docs) {
     const s = doc.data();
+    const cibles = Array.isArray(s.destinataires) && s.destinataires.length
+      ? evs.filter(e => s.destinataires.includes(e.id))
+      : evs; // pas de sélection enregistrée -> comportement historique (tous les actifs)
     const dateLabel = new Date(s.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-    for (const ev of evs) {
+    for (const ev of cibles) {
       const contenu = `Bonjour ${ev.nom},\n\nUne nouvelle sortie d'évangélisation vous attend ! Venez nombreux, votre présence compte pour l'équipe.\n\nLieu : ${s.lieu}\nDate : ${dateLabel}\n${s.description ? `Détail : ${s.description}\n` : ''}\nMerci d'indiquer votre présence dans l'app (Je viens / Je ne peux pas) dès que possible.\n\n"${versets[1].txt}" (${versets[1].ref})\n\nFraternellement,\nCommission Témoignage — EEAM Fès`;
 
       await queueCommunication(`${doc.id}_${ev.id}_sortie`, {
@@ -242,7 +264,7 @@ async function runSortiesCollectives() {
       });
     }
     await doc.ref.update({ notifie: true, notifieAt: admin.firestore.FieldValue.serverTimestamp() });
-    console.log(`✔ Sortie collective "${s.lieu}" — invitations déposées pour ${evs.length} évangéliste(s) (à valider)`);
+    console.log(`✔ Sortie collective "${s.lieu}" — invitations déposées pour ${cibles.length} évangéliste(s) (à valider)`);
   }
 }
 
@@ -297,7 +319,7 @@ async function runRappelActionPrevue(now) {
    l'app, ça pose pushDemande:true. Ce script livre la vraie bannière
    téléphone à son prochain passage (la clé privée VAPID ne peut
    vivre que côté serveur). ── */
-async function runPushDemandes() {
+async function runPushDemandes(now) {
   const snap = await db.collection('communications_queue')
     .where('pushDemande', '==', true)
     .where('pushEnvoye', '!=', true)
@@ -305,15 +327,19 @@ async function runPushDemandes() {
   if (snap.empty) return;
 
   const titres = {
-    hebdo:       'Rappel hebdomadaire — Commission Témoignage',
-    visite_mois: 'Rappel visite mensuelle — Commission Témoignage',
-    sortie:      'Sortie collective — Commission Témoignage',
-    manuel:      'Message — Commission Témoignage',
+    hebdo:         'Rappel hebdomadaire — Commission Témoignage',
+    visite_mois:   'Rappel visite mensuelle — Commission Témoignage',
+    sortie:        'Sortie collective — Commission Témoignage',
+    action_prevue: 'Rendez-vous dans 2 jours — Commission Témoignage',
+    manuel:        'Message — Commission Témoignage',
   };
 
   for (const doc of snap.docs) {
     const c = doc.data();
-    const titre = titres[c.type] || 'Commission Témoignage';
+    // Un message "manuel" programmé pour plus tard ne doit pas livrer sa
+    // bannière avant sa date, même si pushDemande a été posé à l'avance.
+    if (c.programmePour && new Date(c.programmePour).getTime() > now.getTime()) continue;
+    const titre = c.objet ? `✍️ ${c.objet}` : (titres[c.type] || 'Commission Témoignage');
     const corps = (c.contenu || '').split('\n').find(l => l.trim()) || 'Voir l\'application pour le détail.';
     const ok = await sendPush(c.evId, titre, corps);
     await doc.ref.update({
@@ -332,7 +358,7 @@ async function runPushDemandes() {
   await runRappelVisiteMensuelle(now);
   await runRappelActionPrevue(now);
   await runSortiesCollectives();
-  await runPushDemandes();
+  await runPushDemandes(now);
   console.log('✔ Terminé.');
   process.exit(0);
 })().catch(err => {
