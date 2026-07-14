@@ -1987,7 +1987,7 @@ body .animate, body .spinner, body [class*="anim"] {
       <!-- Programmer une sortie collective (toute la commission) -->
       <div class="card" style="padding:18px;margin-bottom:14px;border:1.5px solid var(--c1);">
         <div class="chart-title" style="margin-bottom:4px;">📢 Programmer une sortie collective</div>
-        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Annonce envoyée à tous les évangélistes (notification + email). Ils répondent "Je viens" / "Je ne peux pas". Après la sortie, revenez ici pour ajouter le compte-rendu.</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Chaque évangéliste sélectionné reçoit un message dans la file d'attente (onglet 💬 Communications) : vous validez ensuite l'envoi de l'email et/ou de la notification, comme pour les autres rappels. Après la sortie, revenez ici pour ajouter le compte-rendu.</div>
         <div class="edit-field-row">
           <div class="edit-field"><label>Date</label><input type="date" id="sc-date" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
           <div class="edit-field"><label>Lieu</label><input type="text" id="sc-lieu" placeholder="ex: Zone Bensouda" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
@@ -2497,6 +2497,12 @@ body .animate, body .spinner, body [class*="anim"] {
             <button type="button" class="btn" style="flex:1;" onclick="annulerIndisponibilite()">Annuler</button>
           </div>
         </div>
+      </div>
+
+      <!-- Programmer ma visite mensuelle accompagnée -->
+      <div id="ev-visite-prog-card" style="background:var(--surface);border:1.5px solid var(--c1);border-radius:14px;padding:14px 16px;margin-bottom:14px;display:none;">
+        <div style="font-size:12px;font-weight:700;color:var(--c1);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">📅 Programmer ma visite accompagnée du mois</div>
+        <div id="ev-visite-prog-body"></div>
       </div>
 
       <!-- Notifications téléphone -->
@@ -5069,6 +5075,7 @@ function initEvSpace() {
     renderEvFiches();
     renderEvEvangelistesList();
     majBadgeIcone();
+    renderVisiteMoisProg();
     if (!S._rappelsAutoChecked) { S._rappelsAutoChecked = true; checkRappelsAutomatiques(); }
   });
 
@@ -5084,6 +5091,9 @@ function initEvSpace() {
 
   // Sorties collectives de la commission
   initSortiesCollectives();
+
+  // Programmation de la visite mensuelle accompagnée
+  initVisiteMoisProg();
 
   // Notifications push : vérifier l'état à l'ouverture de l'espace
   checkPushStatus();
@@ -5940,8 +5950,41 @@ async function creerSortieCollective() {
   const btn = document.getElementById('sc-save-btn');
   if (btn) btn.disabled = true;
   try {
-    await window._createSortieCollective({ date, lieu, description: desc || null, creePar: S.respNom || 'Responsable', destinataires: destinataires.length ? destinataires : null });
-    toast('✅ Sortie collective publiée, les évangélistes sélectionnés vont être notifiés');
+    const ref = await window._createSortieCollective({ date, lieu, description: desc || null, creePar: S.respNom || 'Responsable', destinataires: destinataires.length ? destinataires : null });
+    const sortieId = ref.id;
+    const cibles = destinataires.length
+      ? (S.evs || []).filter(e => destinataires.includes(e.id))
+      : (S.evs || []).filter(e => e.actif !== false);
+    const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+    // Un message par destinataire, déposé en attente — c'est vous qui déclenchez
+    // ensuite l'email et/ou la notification depuis l'onglet Communications.
+    await Promise.all(cibles.map(ev => {
+      const contenu =
+`Bonjour ${ev.nom},
+
+Une sortie collective est prévue :
+📍 ${lieu}
+📅 ${dateLabel}
+${desc ? '📝 ' + desc + '\n' : ''}
+Merci de répondre directement depuis l'app (onglet Agenda) : « Je viens » ou « Je ne peux pas ».
+
+Fraternellement,
+Commission Témoignage — EEAM Fès`;
+      return window._upsertCommunication(`${sortieId}_${ev.id}`, {
+        type:         'sortie',
+        evId:         ev.id,
+        evNom:        ev.nom,
+        evEmail:      ev.email || null,
+        sortieId,
+        contenu,
+        statut:       'attente',
+        emailEnvoye:  false,
+        notifEnvoyee: false,
+        pushDemande:  false,
+        createdAt:    firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }));
+    toast(`✅ Sortie publiée — ${cibles.length} message(s) déposé(s) dans la file d'attente (onglet Communications)`);
     document.getElementById('sc-date').value = '';
     document.getElementById('sc-lieu').value = '';
     document.getElementById('sc-desc').value = '';
@@ -6136,6 +6179,7 @@ const _COMM_TYPE_LABELS = {
   hebdo:         '📅 Rappel hebdomadaire',
   visite_mois:   '🚶 Rappel visite mensuelle',
   sortie:        '🚌 Invitation sortie collective',
+  accompagnement:'🤝 Demande d\'accompagnement',
   manuel:        '✍️ Message de la responsable',
   action_prevue: '⏰ Action/visite prévue (48h)',
 };
@@ -6143,6 +6187,7 @@ const _COMM_BADGES = {
   hebdo:         '📅 Rappel hebdomadaire',
   visite_mois:   '🚶 Rappel visite mensuelle',
   sortie:        '🚌 Invitation — Sortie collective',
+  accompagnement:'🤝 Demande d\'accompagnement de visite',
   manuel:        '✍️ Message de la Commission',
   action_prevue: '⏰ Rappel — Action prévue bientôt',
 };
@@ -7780,6 +7825,14 @@ Commission Témoignage — EEAM Fès`;
 }
 
 /* Rappel : programmer une visite mensuelle accompagnée pour chaque fiche */
+function _dateSuggereeVisiteMois(now) {
+  const dernierJourMois = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  let jour = dernierJourMois - 7;
+  if (jour < now.getDate()) jour = now.getDate(); // jamais une date déjà passée
+  jour = Math.min(jour, dernierJourMois);
+  return new Date(now.getFullYear(), now.getMonth(), jour).toISOString().split('T')[0];
+}
+
 async function checkRappelVisiteMensuelle() {
   if (!S.evId) return;
   const now = new Date();
@@ -7807,6 +7860,7 @@ async function checkRappelVisiteMensuelle() {
   const nomsCollegues = collegues.length
     ? collegues.map(e => e.nom).join(', ')
     : 'aucun signalé pour l\'instant — voir avec la responsable de zone';
+  const dateSuggereeLabel = new Date(_dateSuggereeVisiteMois(now) + 'T00:00:00').toLocaleDateString('fr-FR', {day:'numeric', month:'long'});
 
   const v = versets[1];
   const contenu =
@@ -7814,10 +7868,12 @@ async function checkRappelVisiteMensuelle() {
 
 Nouveau mois, nouvelle occasion de marcher aux côtés de ceux que vous suivez ! 🚶
 
-Pensez à programmer une visite accompagnée ce mois-ci pour vos ${mesFiches.length} fiche(s) :
+Pensez à programmer une visite accompagnée ce mois-ci (date suggérée : ${dateSuggereeLabel}, modifiable) pour vos ${mesFiches.length} fiche(s) :
 ${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
 
 👥 Accompagnateur(s) suggéré(s) : ${nomsCollegues}
+
+👉 Programmez la date et choisissez votre accompagnateur directement dans l'onglet Agenda de l'app.
 
 « ${v.txt} » (${v.ref})
 
@@ -7838,6 +7894,134 @@ Commission Témoignage — EEAM Fès`;
     pushDemande:   false,
     createdAt:     firebase.firestore.FieldValue.serverTimestamp()
   }).catch(() => {});
+}
+
+/* ── PROGRAMMATION DE LA VISITE MENSUELLE ACCOMPAGNÉE (par l'évangéliste) ──
+   Coordonnée avec le rappel ci-dessus : même date suggérée par défaut, et
+   la confirmation vient compléter le message déjà déposé pour ce mois. ── */
+function initVisiteMoisProg() {
+  if (!S.evId || S.unsubVisiteMoisProg) return;
+  const cle = _cleMois(new Date());
+  S._visiteMoisCle = cle;
+  S.unsubVisiteMoisProg = db.collection('rappels_visite_mois').doc(`${S.evId}_${cle}`)
+    .onSnapshot(snap => {
+      S.visiteMoisProg = snap.exists ? snap.data() : null;
+      renderVisiteMoisProg();
+    }, () => {});
+}
+
+function renderVisiteMoisProg() {
+  const card = document.getElementById('ev-visite-prog-card');
+  const body = document.getElementById('ev-visite-prog-body');
+  if (!card || !body) return;
+  const mesFiches = (S.myFiches || []).filter(f => !f.deleted);
+  if (!mesFiches.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  const prog = S.visiteMoisProg;
+
+  if (prog && prog.programmee) {
+    const dateLabel = new Date(prog.dateVisite + 'T00:00:00').toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
+    body.innerHTML = `
+      <div style="font-size:13px;line-height:1.6;">
+        ✅ Visite programmée le <strong>${dateLabel}</strong>${prog.accompagnateurNom ? ' avec <strong>' + _esc(prog.accompagnateurNom) + '</strong>' : ' — sans accompagnateur pour l\'instant'}.
+      </div>
+      <button type="button" class="btn" style="margin-top:10px;" onclick="ouvrirFormVisiteMoisProg()">✏️ Modifier</button>
+      <div id="ev-visite-prog-form" style="display:none;margin-top:10px;"></div>`;
+    return;
+  }
+
+  body.innerHTML = `<div id="ev-visite-prog-form"></div>`;
+  ouvrirFormVisiteMoisProg();
+}
+
+function ouvrirFormVisiteMoisProg() {
+  const zone = document.getElementById('ev-visite-prog-form');
+  if (!zone) return;
+  const ev = (S.evs||[]).find(e => e.id === S.evId);
+  const collegues = (S.evs || []).filter(e => e.disponible && e.id !== S.evId && ev && e.equipe === ev.equipe);
+  const prog = S.visiteMoisProg;
+  const dateDefaut = (prog && prog.dateVisite) || _dateSuggereeVisiteMois(new Date());
+  const today = new Date().toISOString().split('T')[0];
+
+  zone.style.display = 'block';
+  zone.innerHTML = `
+    <div class="edit-field"><label>Date de la visite</label><input type="date" id="vmp-date" min="${today}" value="${dateDefaut}" style="background:var(--bg);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
+    <div class="edit-field" style="margin-top:8px;"><label>Accompagnateur</label>
+      <select id="vmp-accompagnateur" style="background:var(--bg);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
+        <option value="">— Aucun / à définir plus tard —</option>
+        ${collegues.map(c => `<option value="${c.id}" ${prog && prog.accompagnateurId === c.id ? 'selected' : ''}>${_esc(c.nom)}</option>`).join('')}
+      </select>
+      ${!collegues.length ? '<div style="font-size:11px;color:var(--mu);margin-top:4px;">Aucun collègue de zone n\'est déclaré disponible pour le moment.</div>' : ''}
+    </div>
+    <button type="button" class="btn btn-primary btn-full" style="margin-top:10px;" onclick="confirmerVisiteMoisProg()">✅ Confirmer la programmation</button>`;
+}
+
+async function confirmerVisiteMoisProg() {
+  const date = document.getElementById('vmp-date')?.value;
+  const accId = document.getElementById('vmp-accompagnateur')?.value;
+  if (!date) { toast('❌ La date est obligatoire'); return; }
+  const ev = (S.evs||[]).find(e => e.id === S.evId);
+  const accompagnateur = accId ? (S.evs||[]).find(e => e.id === accId) : null;
+  const cle = S._visiteMoisCle || _cleMois(new Date());
+  const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+
+  try {
+    await db.collection('rappels_visite_mois').doc(`${S.evId}_${cle}`).set({
+      evId: S.evId, cle,
+      programmee: true,
+      dateVisite: date,
+      accompagnateurId: accompagnateur ? accompagnateur.id : null,
+      accompagnateurNom: accompagnateur ? accompagnateur.nom : null,
+      programmeeAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    // Notifier l'accompagnateur — déposé en attente, comme toute communication automatique
+    if (accompagnateur) {
+      const mesFiches = (S.myFiches || []).filter(f => !f.deleted);
+      const contenuAcc =
+`Bonjour ${accompagnateur.nom},
+
+${ev.nom} vous propose de l'accompagner pour sa visite mensuelle :
+📅 ${dateLabel}
+👥 Fiches concernées (${mesFiches.length}) : ${mesFiches.map(f => `${f.nom} ${f.prenom}`).join(', ')}
+
+Merci de le/la contacter directement pour convenir des détails.
+
+Fraternellement,
+Commission Témoignage — EEAM Fès`;
+      await window._upsertCommunication(`${S.evId}_${cle}_accompagnement`, {
+        type:          'accompagnement',
+        evId:          accompagnateur.id,
+        evNom:         accompagnateur.nom,
+        evEmail:       accompagnateur.email || null,
+        cle,
+        contenu:       contenuAcc,
+        statut:        'attente',
+        emailEnvoye:   false,
+        notifEnvoyee:  false,
+        pushDemande:   false,
+        createdAt:     firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    // Cohérence : compléter le rappel déjà déposé pour l'évangéliste lui-même
+    try {
+      const msgRef = db.collection('communications_queue').doc(`${S.evId}_${cle}_visite`);
+      const msgSnap = await msgRef.get();
+      if (msgSnap.exists) {
+        const c = msgSnap.data();
+        const base = (c.contenu || '').replace(/\n\n✅ Visite programmée.*$/s, '');
+        const ligneConfirm = `\n\n✅ Visite programmée le ${dateLabel}${accompagnateur ? ' avec ' + accompagnateur.nom : ''}.`;
+        await msgRef.update({ contenu: base + ligneConfirm });
+      }
+    } catch(e) { /* pas bloquant */ }
+
+    toast('✅ Visite mensuelle programmée' + (accompagnateur ? ' — ' + accompagnateur.nom + ' a été notifié(e)' : ''));
+  } catch (e) {
+    console.error('confirmerVisiteMoisProg:', e);
+    toast('❌ Erreur — réessayez');
+  }
 }
 
 function checkRappelsAutomatiques() {
@@ -7861,7 +8045,7 @@ function switchEvTab(name, btn) {
   if (el) { el.style.display = 'block'; el.classList.add('on'); }
   if (btn) btn.classList.add('on');
   if (name === 'acts')    renderEvMyActs();
-  if (name === 'rappels') { renderEvAgenda(); renderEvRappels(); checkAutoReactivationDispo(); renderDispoToggle(); checkPushStatus(); renderSortiesCollectivesEv(); }
+  if (name === 'rappels') { renderEvAgenda(); renderEvRappels(); checkAutoReactivationDispo(); renderDispoToggle(); renderVisiteMoisProg(); checkPushStatus(); renderSortiesCollectivesEv(); }
 }
 
 /* ── DISPONIBILITÉ POUR ACCOMPAGNER UNE VISITE ───────────── */
