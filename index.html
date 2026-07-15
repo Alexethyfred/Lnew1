@@ -1145,6 +1145,43 @@ body {
   .kpi-num { font-size: 24px; }
 }
 
+/* ══════════════════════════════════════════════════════════
+   RESPONSIVE MOBILE — filet de sécurité anti-débordement
+   L'app utilise beaucoup de flexbox avec du contenu dynamique
+   (emails, noms, listes) inséré via JS. Sans ça, un enfant flex
+   refuse par défaut de rétrécir sous la largeur de son contenu
+   (min-width: auto), ce qui pousse les cartes à déborder de
+   l'écran au lieu de passer à la ligne. ══════════════════════ */
+@media (max-width: 600px) {
+  /* Autoriser tous les enfants flex/grid à rétrécir sous leur
+     contenu — la cause la plus fréquente de débordement mobile. */
+  .card, .card *, [id$="-list"], [id$="-list"] *, [id*="-bloc"], [id*="-bloc"] * {
+    min-width: 0;
+  }
+
+  /* Les textes longs (emails, noms composés, motifs) doivent
+     casser plutôt que forcer la largeur du conteneur. */
+  body, .card, .modal-body { overflow-wrap: break-word; word-break: break-word; }
+
+  /* Espacement resserré et plus homogène sur petit écran */
+  .card { padding: 14px 14px; border-radius: 14px; }
+  .card-header { margin-bottom: 10px; }
+  h1, h2, h3 { line-height: 1.25; }
+  .field { margin-bottom: 12px; }
+
+  /* Toute rangée de boutons (souvent en style inline) doit
+     pouvoir passer à la ligne plutôt que s'écraser ou déborder. */
+  div[style*="display:flex"] { flex-wrap: wrap; }
+  div[style*="display: flex"] { flex-wrap: wrap; }
+
+  /* Les boutons ne doivent jamais descendre sous une taille de
+     confort tactile, ni pousser leur conteneur en largeur. */
+  .btn, .btn-primary, .btn-outline, .btn-danger-sm { min-width: 0; white-space: normal; }
+
+  /* Badges : autoriser le retour à la ligne au lieu de déborder */
+  .badge { white-space: normal; }
+}
+
 /* ── Toast amélioré ─────────────────────────────────────── */
 #toast.toast-ok { background: rgba(26,122,58,.95); border-color:rgba(255,255,255,.15); }
 #toast.toast-err { background: rgba(192,57,43,.95); border-color:rgba(255,255,255,.15); }
@@ -5962,13 +5999,15 @@ async function creerSortieCollective() {
       const contenu =
 `Bonjour ${ev.nom},
 
-Une sortie collective est prévue :
+Une belle occasion de servir ensemble se prépare ! 🙌
+
+On se retrouve pour une sortie collective :
 📍 ${lieu}
 📅 ${dateLabel}
 ${desc ? '📝 ' + desc + '\n' : ''}
-Merci de répondre directement depuis l'app (onglet Agenda) : « Je viens » ou « Je ne peux pas ».
+On compte sur votre présence pour vivre ce moment à plusieurs — dites-nous vite si vous êtes des nôtres en répondant directement dans l'app (onglet Agenda) : « Je viens » ou « Je ne peux pas ».
 
-Fraternellement,
+Avec joie et fraternité,
 Commission Témoignage — EEAM Fès`;
       return window._upsertCommunication(`${sortieId}_${ev.id}`, {
         type:         'sortie',
@@ -7786,24 +7825,24 @@ async function checkRappelHebdoContact() {
   const contenu = mesFiches.length ?
 `Bonjour ${ev.nom},
 
-Belle semaine à vous ! 🙏 Voici votre point hebdomadaire.
+Belle semaine à vous ! 🙏 On pense à vous et à ce que Dieu fait à travers votre fidélité.
 
-📋 Fiches à contacter d'ici lundi (${mesFiches.length}) :
+📋 D'ici lundi, pensez à prendre des nouvelles de ${mesFiches.length} personne(s) :
 ${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
 
-📊 Cette semaine : ${nbVisites} visite(s) effectuée(s), ${nbAppelsMsg} appel(s)/message(s) envoyé(s). Merci pour votre engagement fidèle !
+📊 Cette semaine, vous avez déjà fait ${nbVisites} visite(s) et ${nbAppelsMsg} appel(s)/message(s) — merci, chaque geste compte !
 
 « ${v.txt} » (${v.ref})
 
-Fraternellement,
+Avec gratitude,
 Commission Témoignage — EEAM Fès` :
 `Bonjour ${ev.nom},
 
-Belle semaine à vous ! 🙏 Petit rappel : pensez à prendre des nouvelles des personnes que vous suivez d'ici lundi.
+Belle semaine à vous ! 🙏 Un petit mot simplement pour vous encourager : prenez des nouvelles de ceux que vous suivez d'ici lundi — même un message rapide fait une vraie différence.
 
 « ${v.txt} » (${v.ref})
 
-Fraternellement,
+Avec gratitude,
 Commission Témoignage — EEAM Fès`;
 
   // Mis en file pour CHAQUE évangéliste — email ET notification restent
@@ -7866,18 +7905,18 @@ async function checkRappelVisiteMensuelle() {
   const contenu =
 `Bonjour ${ev.nom},
 
-Nouveau mois, nouvelle occasion de marcher aux côtés de ceux que vous suivez ! 🚶
+Un nouveau mois commence — une belle occasion de marcher, à deux, aux côtés de ceux que vous accompagnez ! 🚶🙏
 
-Pensez à programmer une visite accompagnée ce mois-ci (date suggérée : ${dateSuggereeLabel}, modifiable) pour vos ${mesFiches.length} fiche(s) :
+Pensez à programmer une visite accompagnée ce mois-ci (date suggérée : ${dateSuggereeLabel}, libre à vous de l'ajuster) pour vos ${mesFiches.length} fiche(s) :
 ${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
 
-👥 Accompagnateur(s) suggéré(s) : ${nomsCollegues}
+👥 Accompagnateur(s) disponible(s) en ce moment : ${nomsCollegues}
 
-👉 Programmez la date et choisissez votre accompagnateur directement dans l'onglet Agenda de l'app.
+👉 Vous pouvez choisir la date et l'accompagnateur directement dans l'onglet Agenda de l'app.
 
 « ${v.txt} » (${v.ref})
 
-Fraternellement,
+Avec joie,
 Commission Témoignage — EEAM Fès`;
 
   window._upsertCommunication(`${S.evId}_${cle}_visite`, {
@@ -7982,13 +8021,14 @@ async function confirmerVisiteMoisProg() {
       const contenuAcc =
 `Bonjour ${accompagnateur.nom},
 
-${ev.nom} vous propose de l'accompagner pour sa visite mensuelle :
+Belle nouvelle : ${ev.nom} aimerait vous avoir à ses côtés pour sa visite mensuelle ! 🤝
+
 📅 ${dateLabel}
 👥 Fiches concernées (${mesFiches.length}) : ${mesFiches.map(f => `${f.nom} ${f.prenom}`).join(', ')}
 
-Merci de le/la contacter directement pour convenir des détails.
+Prenez contact avec ${ev.nom} quand vous voulez pour vous organiser ensemble — merci d'avance pour votre disponibilité, c'est précieux !
 
-Fraternellement,
+Avec reconnaissance,
 Commission Témoignage — EEAM Fès`;
       await window._upsertCommunication(`${S.evId}_${cle}_accompagnement`, {
         type:          'accompagnement',
