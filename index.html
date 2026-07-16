@@ -8150,11 +8150,20 @@ function renderVisiteMoisProg() {
 
   if (prog && prog.programmee) {
     const dateLabel = new Date(prog.dateVisite + 'T00:00:00').toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
+    const statutMsg = prog.accompagnateurId
+      ? (prog.accompagnateurMessageEnvoye
+          ? `<div style="font-size:12px;margin-top:6px;color:var(--ok);font-weight:600;">✅ Message d'invitation envoyé à ${_esc(prog.accompagnateurNom || '')}</div>`
+          : `<div style="font-size:12px;margin-top:6px;color:var(--wa);font-weight:600;">⚠️ Pensez à envoyer le message d'invitation à ${_esc(prog.accompagnateurNom || '')}</div>`)
+      : '';
     body.innerHTML = `
       <div style="font-size:13px;line-height:1.6;">
         ✅ Visite programmée le <strong>${dateLabel}</strong>${prog.accompagnateurNom ? ' avec <strong>' + _esc(prog.accompagnateurNom) + '</strong>' : ' — sans accompagnateur pour l\'instant'}.
       </div>
-      <button type="button" class="btn" style="margin-top:10px;" onclick="ouvrirFormVisiteMoisProg()">✏️ Modifier</button>
+      ${statutMsg}
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button type="button" class="btn" style="flex:1;" onclick="ouvrirFormVisiteMoisProg()">✏️ Modifier</button>
+        ${prog.accompagnateurId && !prog.accompagnateurMessageEnvoye ? '<button type="button" class="btn btn-primary" style="flex:1;" onclick="relancerInvitationAccompagnement()">✉️ Envoyer le message</button>' : ''}
+      </div>
       <div id="ev-visite-prog-form" style="display:none;margin-top:10px;"></div>`;
     return;
   }
@@ -8205,7 +8214,6 @@ async function confirmerVisiteMoisProg() {
   const date = document.getElementById('vmp-date')?.value;
   const accId = document.getElementById('vmp-accompagnateur')?.value;
   if (!date) { toast('❌ La date est obligatoire'); return; }
-  const ev = (S.evs||[]).find(e => e.id === S.evId);
   const accompagnateur = accId ? (S.evs||[]).find(e => e.id === accId) : null;
   const cle = S._visiteMoisCle || _cleMois(new Date());
   const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
@@ -8217,38 +8225,9 @@ async function confirmerVisiteMoisProg() {
       dateVisite: date,
       accompagnateurId: accompagnateur ? accompagnateur.id : null,
       accompagnateurNom: accompagnateur ? accompagnateur.nom : null,
+      accompagnateurMessageEnvoye: false,
       programmeeAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
-
-    // Notifier l'accompagnateur — déposé en attente, comme toute communication automatique
-    if (accompagnateur) {
-      const mesFiches = (S.myFiches || []).filter(f => !f.deleted);
-      const contenuAcc =
-`Bonjour ${accompagnateur.nom},
-
-Belle nouvelle : ${ev.nom} aimerait vous avoir à ses côtés pour sa visite mensuelle ! 🤝
-
-📅 ${dateLabel}
-👥 Fiches concernées (${mesFiches.length}) : ${mesFiches.map(f => `${f.nom} ${f.prenom}`).join(', ')}
-
-Prenez contact avec ${ev.nom} quand vous voulez pour vous organiser ensemble — merci d'avance pour votre disponibilité, c'est précieux !
-
-Avec reconnaissance,
-Commission Témoignage — EEAM Fès`;
-      await window._upsertCommunication(`${S.evId}_${cle}_accompagnement`, {
-        type:          'accompagnement',
-        evId:          accompagnateur.id,
-        evNom:         accompagnateur.nom,
-        evEmail:       accompagnateur.email || null,
-        cle,
-        contenu:       contenuAcc,
-        statut:        'attente',
-        emailEnvoye:   false,
-        notifEnvoyee:  false,
-        pushDemande:   false,
-        createdAt:     firebase.firestore.FieldValue.serverTimestamp()
-      });
-    }
 
     // Cohérence : compléter le rappel déjà déposé pour l'évangéliste lui-même
     try {
@@ -8262,9 +8241,97 @@ Commission Témoignage — EEAM Fès`;
       }
     } catch(e) { /* pas bloquant */ }
 
-    toast('✅ Visite mensuelle programmée' + (accompagnateur ? ' — ' + accompagnateur.nom + ' a été notifié(e)' : ''));
+    toast('✅ Visite mensuelle programmée');
+    S.visiteMoisProg = { evId: S.evId, cle, programmee: true, dateVisite: date, accompagnateurId: accompagnateur ? accompagnateur.id : null, accompagnateurNom: accompagnateur ? accompagnateur.nom : null, accompagnateurMessageEnvoye: false };
+    renderVisiteMoisProg();
+
+    // C'est l'évangéliste lui-même qui envoie l'invitation sur WhatsApp,
+    // avec un message suggéré modifiable — pas d'envoi automatique en coulisse.
+    if (accompagnateur) {
+      const mesFiches = (S.myFiches || []).filter(f => !f.deleted);
+      afficherEnvoiInvitationAccompagnement(accompagnateur, dateLabel, mesFiches.length, cle);
+    }
   } catch (e) {
     console.error('confirmerVisiteMoisProg:', e);
+    toast('❌ Erreur — réessayez');
+  }
+}
+
+// Ré-ouvre le composeur d'invitation depuis le résumé (visite déjà programmée,
+// message pas encore envoyé, ou besoin de le renvoyer)
+function relancerInvitationAccompagnement() {
+  const prog = S.visiteMoisProg;
+  if (!prog || !prog.accompagnateurId) return;
+  const accompagnateur = (S.evs || []).find(e => e.id === prog.accompagnateurId);
+  if (!accompagnateur) return toast('⚠️ Accompagnateur introuvable');
+  const dateLabel = new Date(prog.dateVisite + 'T00:00:00').toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
+  const mesFiches = (S.myFiches || []).filter(f => !f.deleted);
+  afficherEnvoiInvitationAccompagnement(accompagnateur, dateLabel, mesFiches.length, prog.cle || S._visiteMoisCle);
+}
+
+// Texte suggéré (modifiable) pour inviter un-e collègue à accompagner la visite
+function texteInvitationAccompagnement(evNom, accNom, dateLabel, nbFiches) {
+  return `Bonjour ${accNom},
+
+Ça vous dirait de m'accompagner pour ma visite mensuelle le ${dateLabel} ? 🤝
+On visiterait ${nbFiches} personne${nbFiches > 1 ? 's' : ''} au total.
+
+Dites-moi si ça vous va, on s'organise ensemble !
+
+${evNom}`;
+}
+
+// Affiche le composeur de message (texte modifiable + envoi WhatsApp direct)
+// pour inviter l'accompagnateur choisi — même logique que les messages suggérés
+// envoyés aux fiches : un texte proposé, personnalisable, envoyé par l'évangéliste.
+function afficherEnvoiInvitationAccompagnement(accompagnateur, dateLabel, nbFiches, cle) {
+  const zone = document.getElementById('ev-visite-prog-form');
+  if (!zone) return;
+  const telRaw = (accompagnateur.telephone || accompagnateur.tel || '').replace(/\s/g, '');
+  const telIntl = telRaw.startsWith('+') ? telRaw : (telRaw ? '+212' + telRaw.replace(/^0/, '') : '');
+  if (!telIntl) {
+    zone.style.display = 'block';
+    zone.innerHTML = `<div style="font-size:12.5px;color:var(--mu);">⚠️ Aucun numéro WhatsApp enregistré pour ${_esc(accompagnateur.nom)} — prévenez-le autrement.</div>`;
+    return;
+  }
+  const evNom = (S.evs || []).find(e => e.id === S.evId)?.nom || S.evNom || '';
+  const texteDefaut = texteInvitationAccompagnement(evNom, accompagnateur.nom, dateLabel, nbFiches);
+  S._invitAccTel = telIntl.replace('+', '');
+  S._invitAccCle = cle;
+  S._invitAccId = accompagnateur.id;
+  S._invitAccNom = accompagnateur.nom;
+
+  zone.style.display = 'block';
+  zone.innerHTML = `
+    <div style="font-size:12px;font-weight:700;color:var(--c1);margin-bottom:6px;">✉️ Message pour ${_esc(accompagnateur.nom)}</div>
+    <div style="font-size:11px;color:var(--mu);margin-bottom:8px;">Modifiez si besoin, puis envoyez sur WhatsApp.</div>
+    <div style="position:relative;">
+      <textarea id="vmp-invit-texte" rows="6" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 40px 9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:vertical;width:100%;color:var(--tx);">${_esc(texteDefaut)}</textarea>
+      <button type="button" class="btn-mic" id="vmp-invit-mic" onclick="toggleDictee('vmp-invit-texte','vmp-invit-mic')" title="Dicter">🎤</button>
+    </div>
+    <button type="button" class="btn btn-primary btn-full" style="margin-top:10px;" onclick="envoyerInvitationWhatsApp()">💬 Ouvrir WhatsApp pour envoyer</button>
+    <button type="button" class="btn btn-full" style="margin-top:8px;" onclick="confirmerInvitationEnvoyee()">✅ C'est envoyé</button>`;
+}
+
+function envoyerInvitationWhatsApp() {
+  const texte = document.getElementById('vmp-invit-texte')?.value.trim();
+  if (!texte) return toast('⚠️ Le message est vide');
+  window.open(`https://wa.me/${S._invitAccTel}?text=${encodeURIComponent(texte)}`, '_blank');
+}
+
+async function confirmerInvitationEnvoyee() {
+  const cle = S._invitAccCle;
+  if (!cle) return;
+  try {
+    await db.collection('rappels_visite_mois').doc(`${S.evId}_${cle}`).update({
+      accompagnateurMessageEnvoye: true,
+      accompagnateurMessageEnvoyeAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    if (S.visiteMoisProg) S.visiteMoisProg.accompagnateurMessageEnvoye = true;
+    toast(`✅ Envoi noté pour ${S._invitAccNom || ''}`);
+    renderVisiteMoisProg();
+  } catch (e) {
+    console.error('confirmerInvitationEnvoyee:', e);
     toast('❌ Erreur — réessayez');
   }
 }
