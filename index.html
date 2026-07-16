@@ -2030,18 +2030,7 @@ body .animate, body .spinner, body [class*="anim"] {
           <div class="edit-field"><label>Lieu</label><input type="text" id="sc-lieu" placeholder="ex: Zone Bensouda" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);"></div>
         </div>
         <div class="edit-field" style="margin-top:10px;"><label>Description (optionnel)</label><textarea id="sc-desc" rows="2" placeholder="Détails, point de rendez-vous, horaire…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);resize:vertical;"></textarea></div>
-        <div class="edit-field" style="margin-top:10px;">
-          <label style="display:flex;justify-content:space-between;align-items:center;">
-            <span>Destinataires</span>
-            <span style="display:flex;gap:10px;font-weight:400;font-size:11.5px;">
-              <a href="javascript:void(0)" onclick="toggleTousSortieDestinataires(true)">tout cocher</a>
-              <a href="javascript:void(0)" onclick="toggleTousSortieDestinataires(false)">tout décocher</a>
-            </span>
-          </label>
-          <div id="sc-destinataires" style="max-height:170px;overflow:auto;border:1.5px solid var(--bo);border-radius:8px;padding:8px 10px;background:var(--surface);display:flex;flex-direction:column;gap:4px;"></div>
-          <div style="font-size:11px;color:var(--mu);margin-top:4px;">Par défaut, tous les évangélistes actifs sont cochés. Décochez pour cibler une sortie zonale par exemple — vous pourrez encore modifier/retirer chaque message dans la file d'attente avant l'envoi.</div>
-        </div>
-        <button class="btn btn-primary btn-full" id="sc-save-btn" onclick="creerSortieCollective()" style="margin-top:12px;">📢 Publier et notifier les évangélistes sélectionnés</button>
+        <button class="btn btn-primary btn-full" id="sc-save-btn" onclick="creerSortieCollective()" style="margin-top:12px;">📢 Publier et notifier les évangélistes</button>
       </div>
 
       <!-- Liste unique : réponses + compte-rendu lié -->
@@ -5293,7 +5282,12 @@ function sauvegarderBrouillon(ficheId) {
 function restaurerBrouillon(ficheId) {
   const champ = document.getElementById(`af-note-${ficheId}`);
   const brouillon = localStorage.getItem(`brouillon_cr_${ficheId}`);
-  if (champ && brouillon && !champ.value.trim()) {
+  if (!champ || !brouillon) return;
+  const type = document.getElementById(`af-type-${ficheId}`)?.value || 'appel';
+  const fiche = (S.myFiches || []).find(f => f.id === ficheId) || (S.fiches || []).find(f => f.id === ficheId);
+  const modele = crModeleParDefaut(type, fiche?.prenom);
+  const estVideOuModele = !champ.value.trim() || champ.value === modele;
+  if (estVideOuModele) {
     champ.value = brouillon;
     toast('📝 Brouillon restauré');
   }
@@ -5836,7 +5830,7 @@ function renderEvFicheCard(f) {
     + '<input type="date" id="af-date-' + f.id + '" value="' + today + '"></div>'
     + '<div class="field"><label>Compte-rendu <span style="font-weight:400;text-transform:none;font-size:10px;color:var(--mu);">(optionnel)</span></label>'
     + '<div style="position:relative;">'
-    + '<textarea id="af-note-' + f.id + '" oninput="sauvegarderBrouillon(\'' + f.id + '\')" placeholder="R\u00e9sum\u00e9 de l\'\u00e9change, \u00e9tat spirituel\u2026 (ou dictez avec le micro \ud83c\udfa4)"></textarea>'
+    + '<textarea id="af-note-' + f.id + '" oninput="sauvegarderBrouillon(\'' + f.id + '\')" placeholder="R\u00e9sum\u00e9 de l\'\u00e9change, \u00e9tat spirituel\u2026 (ou dictez avec le micro \ud83c\udfa4)">' + crEscapeHtml(crModeleParDefaut('appel', f.prenom)) + '</textarea>'
     + '<button type="button" class="btn-mic" id="af-mic-' + f.id + '" onclick="toggleDictee(\'af-note-' + f.id + '\', \'af-mic-' + f.id + '\')" title="Dicter le compte-rendu">\ud83c\udfa4</button>'
     + '</div></div>'
     + '<div class="field"><label>Dur\u00e9e (min)</label>'
@@ -5959,39 +5953,17 @@ function initSortiesCollectives() {
   });
 }
 
-function populateSortieDestinataires() {
-  const el = document.getElementById('sc-destinataires');
-  if (!el) return;
-  const actifs = (S.evs || []).filter(e => e.actif !== false);
-  if (!actifs.length) { el.innerHTML = '<div style="font-size:12px;color:var(--mu);">Aucun évangéliste actif</div>'; return; }
-  // Ne pas écraser les cases si déjà rendues avec les mêmes personnes (évite de perdre une désélection en cours)
-  const idsActuels = Array.from(el.querySelectorAll('input[type=checkbox]')).map(i => i.value).sort().join(',');
-  if (idsActuels === actifs.map(e => e.id).sort().join(',')) return;
-  el.innerHTML = actifs.map(e => `
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-      <input type="checkbox" value="${e.id}" checked> ${_esc(e.nom)}${e.email ? '' : ' <span style="color:var(--mu);font-size:11px;">(⚠️ pas d\'email)</span>'}
-    </label>`).join('');
-}
-function toggleTousSortieDestinataires(checked) {
-  document.querySelectorAll('#sc-destinataires input[type=checkbox]').forEach(i => { i.checked = checked; });
-}
-
 async function creerSortieCollective() {
   const date = document.getElementById('sc-date')?.value;
   const lieu = document.getElementById('sc-lieu')?.value.trim();
   const desc = document.getElementById('sc-desc')?.value.trim();
   if (!date || !lieu) { toast('❌ Date et lieu obligatoires'); return; }
-  const cases = Array.from(document.querySelectorAll('#sc-destinataires input[type=checkbox]'));
-  const destinataires = cases.filter(c => c.checked).map(c => c.value);
-  if (cases.length && !destinataires.length) { toast('❌ Sélectionnez au moins un destinataire'); return; }
   const btn = document.getElementById('sc-save-btn');
   if (btn) btn.disabled = true;
   try {
-    const ref = await window._createSortieCollective({ date, lieu, description: desc || null, creePar: S.respNom || 'Responsable', destinataires: destinataires.length ? destinataires : null });
+    const ref = await window._createSortieCollective({ date, lieu, description: desc || null, creePar: S.respNom || 'Responsable', destinataires: null });
     const sortieId = ref.id;
-    const cibles = destinataires.length
-      ? (S.evs || []).filter(e => destinataires.includes(e.id))
-      : (S.evs || []).filter(e => e.actif !== false);
+    const cibles = (S.evs || []).filter(e => e.actif !== false);
     const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
     // Un message par destinataire, déposé en attente — c'est vous qui déclenchez
     // ensuite l'email et/ou la notification depuis l'onglet Communications.
@@ -6838,7 +6810,7 @@ function switchTab(name, btn) {
     if (badge) badge.style.display = 'none';
   }
   if (name === 'equipes') { renderEquipes(); renderZoneChips(); }
-  if (name === 'sorties') { initSorties(); populateSortieEvWrap(); initSortiesCollectives(); populateSortieDestinataires(); }
+  if (name === 'sorties') { initSorties(); populateSortieEvWrap(); initSortiesCollectives(); }
   if (name === 'communications') { initCommunications(); }
 }
 
@@ -7417,14 +7389,46 @@ async function saveActivity() {
 }
 
 /* ── SAUVEGARDER ACTIVITÉ (évangéliste depuis sa fiche) ─── */
+
+/* Modèles de compte-rendu pré-remplis selon le type d'action choisi.
+   Le texte reste entièrement modifiable : c'est un point de départ,
+   pas une contrainte — l'évangéliste l'adapte à ce qui s'est vraiment passé. */
+function crEscapeHtml(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function crModeleParDefaut(type, prenom) {
+  const nom = (prenom || '').trim() || 'la personne';
+  const modeles = {
+    appel:   `J'ai eu un appel avec ${nom}, tout va bien de son côté.`,
+    visite:  `J'ai eu à effectuer une visite chez ${nom}, tout se passe bien de son côté.`,
+    message: `J'ai envoyé un message à ${nom} pour prendre de ses nouvelles.`
+  };
+  return modeles[type] || '';
+}
+
 function selectActType(ficheId, type, btn) {
   document.querySelectorAll(`#atype-${ficheId} .act-type-btn`).forEach(b => b.classList.remove('on'));
   btn.classList.add('on');
   const inp = document.getElementById(`af-type-${ficheId}`);
+  const ancienType = inp ? inp.value : null;
   if (inp) inp.value = type;
   // Afficher le bloc participants uniquement pour les visites
   const participantsWrap = document.getElementById(`af-participants-wrap-${ficheId}`);
   if (participantsWrap) participantsWrap.style.display = type === 'visite' ? 'block' : 'none';
+
+  // Pré-remplir le compte-rendu avec le modèle du nouveau type, sauf si
+  // l'évangéliste a déjà personnalisé le texte (on ne l'écrase jamais).
+  const champ = document.getElementById(`af-note-${ficheId}`);
+  if (champ && type !== ancienType) {
+    const fiche = (S.myFiches || []).find(f => f.id === ficheId) || (S.fiches || []).find(f => f.id === ficheId);
+    const modeleAncien = ancienType ? crModeleParDefaut(ancienType, fiche?.prenom) : '';
+    const estVide = !champ.value.trim();
+    const estModeleNonModifie = champ.value === modeleAncien;
+    if (estVide || estModeleNonModifie) {
+      champ.value = crModeleParDefaut(type, fiche?.prenom);
+      sauvegarderBrouillon(ficheId);
+    }
+  }
 }
 
 async function saveEvActivity(ficheId) {
@@ -7978,10 +7982,26 @@ function ouvrirFormVisiteMoisProg() {
   const zone = document.getElementById('ev-visite-prog-form');
   if (!zone) return;
   const ev = (S.evs||[]).find(e => e.id === S.evId);
-  const collegues = (S.evs || []).filter(e => e.disponible && e.id !== S.evId && ev && e.equipe === ev.equipe);
   const prog = S.visiteMoisProg;
   const dateDefaut = (prog && prog.dateVisite) || _dateSuggereeVisiteMois(new Date());
   const today = new Date().toISOString().split('T')[0];
+
+  // Tous les évangélistes actifs (hors soi-même) doivent apparaître en suggestion.
+  // Tri : disponibles d'abord (zone la plus proche de la sienne en tête), puis indisponibles en dernier.
+  const autres = (S.evs || []).filter(e => e.id !== S.evId && e.actif !== false);
+  const parProximite = (a, b) => {
+    const aMeme = (ev && a.equipe && a.equipe === ev.equipe) ? 0 : 1;
+    const bMeme = (ev && b.equipe && b.equipe === ev.equipe) ? 0 : 1;
+    if (aMeme !== bMeme) return aMeme - bMeme;
+    return (a.nom || '').localeCompare(b.nom || '');
+  };
+  const disponibles   = autres.filter(e => e.disponible).sort(parProximite);
+  const indisponibles = autres.filter(e => !e.disponible).sort(parProximite);
+
+  const optionHtml = e => `<option value="${e.id}" ${prog && prog.accompagnateurId === e.id ? 'selected' : ''}>${_esc(e.nom)}${e.equipe ? ' · ' + _esc(e.equipe) : ''}</option>`;
+  const optionsHtml = `
+    ${disponibles.length ? `<optgroup label="🟢 Disponibles">${disponibles.map(optionHtml).join('')}</optgroup>` : ''}
+    ${indisponibles.length ? `<optgroup label="⚪ Autres évangélistes (non signalés disponibles)">${indisponibles.map(optionHtml).join('')}</optgroup>` : ''}`;
 
   zone.style.display = 'block';
   zone.innerHTML = `
@@ -7989,9 +8009,9 @@ function ouvrirFormVisiteMoisProg() {
     <div class="edit-field" style="margin-top:8px;"><label>Accompagnateur</label>
       <select id="vmp-accompagnateur" style="background:var(--bg);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
         <option value="">— Aucun / à définir plus tard —</option>
-        ${collegues.map(c => `<option value="${c.id}" ${prog && prog.accompagnateurId === c.id ? 'selected' : ''}>${_esc(c.nom)}</option>`).join('')}
+        ${optionsHtml}
       </select>
-      ${!collegues.length ? '<div style="font-size:11px;color:var(--mu);margin-top:4px;">Aucun collègue de zone n\'est déclaré disponible pour le moment.</div>' : ''}
+      ${!disponibles.length ? '<div style="font-size:11px;color:var(--mu);margin-top:4px;">Aucun collègue n\'est déclaré disponible pour le moment — vous pouvez tout de même choisir parmi tous les évangélistes ci-dessus.</div>' : ''}
     </div>
     <button type="button" class="btn btn-primary btn-full" style="margin-top:10px;" onclick="confirmerVisiteMoisProg()">✅ Confirmer la programmation</button>`;
 }
