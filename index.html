@@ -2218,6 +2218,15 @@ body .animate, body .spinner, body [class*="anim"] {
         </div>
       </div>
 
+      <!-- Visites mensuelles accompagnées : qui a programmé, avec qui, invitation envoyée ou pas -->
+      <div id="visites-mois-wrap" style="display:none;margin-bottom:18px;">
+        <div class="card" style="padding:18px;">
+          <div class="chart-title" style="margin-bottom:4px;">🗓️ Visites mensuelles accompagnées — ce mois</div>
+          <p style="font-size:12px;color:var(--mu);margin-bottom:14px;line-height:1.5;">Chaque évangéliste programme sa visite depuis son espace et envoie lui-même l'invitation WhatsApp à l'accompagnateur choisi. Vue en lecture seule, rien à faire ici.</p>
+          <div id="visites-mois-list"></div>
+        </div>
+      </div>
+
       <!-- Liste unifiée équipe -->
       <div class="card" style="padding:18px;">
         <div class="chart-title" style="margin-bottom:6px;">
@@ -7098,6 +7107,8 @@ function initDashboard() {
     });
     // Suggestion de backup mensuel (fonction existante qui n'était jamais appelée)
     _checkAutoBackup();
+    // Vue en lecture seule des visites mensuelles programmées par les évangélistes
+    initVisitesMoisResp();
   }
 }
 
@@ -7278,6 +7289,7 @@ function renderEvangelistesARelancer() {
 function renderContactsTab() {
   renderUnifiedContactsList();
   renderEvangelistesARelancer();
+  renderVisitesMoisResp();
 }
 
 function renderSuivi() {
@@ -8334,6 +8346,56 @@ async function confirmerInvitationEnvoyee() {
     console.error('confirmerInvitationEnvoyee:', e);
     toast('❌ Erreur — réessayez');
   }
+}
+
+/* ── CÔTÉ RESPONSABLE : vue en lecture seule des visites mensuelles ──
+   accompagnées programmées par chaque évangéliste. Le responsable ne
+   programme rien et n'envoie rien ici — il constate seulement qui a
+   programmé sa visite, avec qui, et si l'invitation a été envoyée. ── */
+function initVisitesMoisResp() {
+  if (S.unsubVisitesMoisResp) return;
+  const cle = _cleMois(new Date());
+  S.unsubVisitesMoisResp = db.collection('rappels_visite_mois').where('cle', '==', cle)
+    .onSnapshot(snap => {
+      S.visitesMoisResp = snap.docs.map(d => d.data());
+      renderVisitesMoisResp();
+    }, err => console.warn('initVisitesMoisResp:', err));
+}
+
+function renderVisitesMoisResp() {
+  const wrap = document.getElementById('visites-mois-wrap');
+  const list = document.getElementById('visites-mois-list');
+  if (!wrap || !list) return;
+
+  const evsConcernes = (S.evs || []).filter(e => e.actif !== false
+    && (S.fiches || []).some(f => f.evangelisteId === e.id && !f.deleted));
+  if (!evsConcernes.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+
+  const progs = S.visitesMoisResp || [];
+  const parEvId = {};
+  progs.forEach(p => { parEvId[p.evId] = p; });
+
+  list.innerHTML = evsConcernes
+    .sort((a, b) => (a.nom || '').localeCompare(b.nom || ''))
+    .map(e => {
+      const prog = parEvId[e.id];
+      let statut, couleur;
+      if (!prog || !prog.programmee) {
+        statut = '⏳ Pas encore programmée'; couleur = 'var(--mu)';
+      } else if (!prog.accompagnateurId) {
+        statut = `📅 Programmée le ${new Date(prog.dateVisite + 'T00:00:00').toLocaleDateString('fr-FR')} — sans accompagnateur`; couleur = 'var(--tx)';
+      } else if (prog.accompagnateurMessageEnvoye) {
+        statut = `✅ Programmée le ${new Date(prog.dateVisite + 'T00:00:00').toLocaleDateString('fr-FR')} avec ${_esc(prog.accompagnateurNom || '')} — invitation envoyée`; couleur = 'var(--ok)';
+      } else {
+        statut = `📅 Programmée le ${new Date(prog.dateVisite + 'T00:00:00').toLocaleDateString('fr-FR')} avec ${_esc(prog.accompagnateurNom || '')} — invitation pas encore envoyée`; couleur = 'var(--wa)';
+      }
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bo);">
+          <div style="font-size:13px;font-weight:700;color:var(--tx);white-space:nowrap;">${_esc(e.nom)}</div>
+          <div style="font-size:12px;color:${couleur};text-align:right;">${statut}</div>
+        </div>`;
+    }).join('');
 }
 
 function checkRappelsAutomatiques() {
@@ -12848,128 +12910,158 @@ if (_origInitDash) {
 
       <div id="aide-contenu-ev">
         <div class="aide-section">
-          <div class="aide-titre">📂 Mes fiches</div>
-          <p>C'est l'écran principal. Vos fiches sont classées toutes seules en quatre groupes : <strong>En retard</strong> (une action était prévue et la date est passée), <strong>À faire aujourd'hui</strong>, <strong>Nouveaux à contacter</strong> (jamais encore approchés) et <strong>Autres</strong>. Vous n'avez rien à trier vous-même, l'app le fait à chaque ouverture.</p>
-          <p>La barre de recherche accepte le texte comme d'habitude, et aussi la voix : tapez sur le micro 🎤 à côté et dites le nom de la personne.</p>
-          <p>Un tap sur une fiche l'ouvre en entier : coordonnées, historique des contacts précédents, et le formulaire de compte-rendu.</p>
+          <div class="aide-titre">📂 Mes fiches — l'écran principal</div>
+          <p>C'est l'écran que vous voyez en premier en ouvrant l'app. En haut, un bandeau affiche votre nom et 4 petits chiffres : <strong>Confiées</strong> (le nombre de personnes qui vous sont attribuées), <strong>Visitées</strong>, <strong>En retard</strong> et <strong>Cette semaine</strong>. C'est juste pour vous donner un coup d'œil rapide, vous n'avez rien à faire ici.</p>
+          <p>Juste en dessous, un bloc <strong>"📈 Ma performance"</strong> montre le nombre total de fiches, le nombre d'activités, et une barre qui se remplit petit à petit : plus elle est pleine, plus vous avez visité de personnes parmi celles qui vous sont confiées.</p>
+          <p>Plus bas, vos fiches (les personnes que vous suivez) sont classées <strong>toutes seules</strong>, sans que vous ayez besoin de trier quoi que ce soit : <strong>En retard</strong> (vous aviez prévu une action et la date est déjà passée), <strong>À faire aujourd'hui</strong>, <strong>Nouveaux à contacter</strong> (des personnes jamais encore approchées) et <strong>Autres</strong>.</p>
+          <p>Un peu plus haut, il y a une longue case blanche avec écrit <strong>"🔍 Rechercher..."</strong> dedans : c'est la barre de recherche. Touchez-la avec votre doigt, un clavier apparaît, tapez le nom ou le prénom d'une personne et la liste se réduit automatiquement à ce qui correspond. À droite de cette case, il y a un petit rond avec un micro dessiné dessus (🎤) : si vous appuyez dessus une fois, vous pouvez dire le nom à voix haute au lieu de le taper, et le texte s'écrit tout seul. Appuyez à nouveau dessus pour arrêter d'écouter.</p>
+          <p>Juste en dessous de la recherche, il y a un texte cliquable <strong>"☑️ Message groupé WhatsApp"</strong> : c'est un bouton (pas juste un titre), expliqué plus bas dans la section "Message suggéré".</p>
+          <p>Chaque personne dans la liste est affichée dans un petit rectangle (une "fiche"). Pour ouvrir une fiche en entier, il suffit de <strong>toucher n'importe où sur ce rectangle</strong> avec le doigt (on appelle ça un "tap"). La fiche s'ouvre alors et affiche : les coordonnées de la personne, l'historique de tous les contacts précédents (les fois où vous l'avez appelée, visitée, etc.), et le formulaire pour ajouter un nouveau compte-rendu.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">📝 Compte-rendu détaillé</div>
-          <p>Ouvrez une fiche pour accéder au formulaire complet : type de contact (appel, visite, message), date, durée, et un champ de texte libre pour raconter l'échange.</p>
-          <p>Ce champ n'est <strong>pas obligatoire</strong>. Si vous le laissez vide, un texte par défaut selon le type de contact est utilisé à sa place, pour ne jamais bloquer l'enregistrement.</p>
-          <p>Vous pouvez taper le compte-rendu ou le <strong>dicter</strong> : appuyez sur le micro 🎤 à côté du champ, parlez normalement, le texte apparaît tout seul.</p>
-          <p>Si l'app se ferme pendant que vous écrivez (appel entrant, batterie, fermeture accidentelle), rien n'est perdu : le texte est sauvegardé automatiquement au fil de la frappe et réapparaît quand vous rouvrez la fiche.</p>
+          <div class="aide-titre">📝 Ouvrir une fiche et écrire un compte-rendu</div>
+          <p>Un "compte-rendu", c'est simplement le résumé de ce qui s'est passé quand vous avez contacté quelqu'un. Après avoir ouvert une fiche (voir ci-dessus), vous voyez un formulaire avec plusieurs cases à remplir : le <strong>type de contact</strong> (appel téléphonique, visite chez la personne, ou message écrit), la <strong>date</strong> où ça s'est passé, la <strong>durée</strong> approximative, et une grande case de texte libre pour raconter l'échange avec vos mots.</p>
+          <p>Cette grande case de texte n'est <strong>pas obligatoire</strong> : vous pouvez la laisser complètement vide si vous êtes pressé. Dans ce cas, l'app écrit automatiquement une phrase toute prête à la place (par exemple "Appel effectué"), pour que rien ne bloque votre enregistrement.</p>
+          <p>Si vous n'avez pas envie de taper avec les doigts, il y a un petit rond avec un micro (🎤) juste à côté de cette case : appuyez dessus, parlez normalement à voix haute en racontant l'échange, et le texte s'écrit tout seul dans la case au fur et à mesure que vous parlez. Appuyez de nouveau sur le micro pour arrêter.</p>
+          <p>Ne vous inquiétez pas si l'app se ferme pendant que vous écrivez (un appel qui arrive, le téléphone qui s'éteint, une fermeture accidentelle) : rien n'est perdu. L'app enregistre votre texte automatiquement au fur et à mesure, en arrière-plan, sans que vous ayez besoin d'appuyer sur "Enregistrer". Si vous rouvrez la même fiche plus tard, votre texte sera encore là.</p>
+          <p>Une fois le formulaire rempli, il y a un bouton en bas (généralement écrit <strong>"💾 Enregistrer"</strong>) : appuyez dessus une seule fois pour que le compte-rendu soit sauvegardé définitivement.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">📅 Prochaine action</div>
-          <p>Dans le formulaire de compte-rendu, deux champs permettent de programmer une suite : un texte libre ("Rappeler", "Inviter au culte"...) et une date. Une liste de suggestions apparaît pendant la saisie du texte pour aller plus vite.</p>
-          <p>Deux boutons remplissent ces champs automatiquement : <strong>"Dans 2 sem. (à recontacter)"</strong> et <strong>"Dans 1 mois (à revisiter)"</strong>. Vous pouvez aussi ignorer ces suggestions et choisir votre propre date.</p>
-          <p>Une fois une action programmée, elle apparaît sur la fiche sous forme d'un badge ⚡ avec l'icône ✏️. Un tap dessus permet de la modifier ou de l'annuler directement, sans repasser par tout le formulaire de compte-rendu.</p>
+          <div class="aide-titre">📅 Programmer une "prochaine action"</div>
+          <p>Toujours dans le formulaire de compte-rendu, en dessous du texte, il y a deux petites cases supplémentaires : une case de texte où vous pouvez écrire ce que vous comptez faire ensuite (par exemple "Rappeler" ou "Inviter au culte"), et une case de date, où vous choisissez le jour où vous prévoyez de le faire.</p>
+          <p>Pendant que vous tapez dans la case de texte, une petite liste de suggestions apparaît en dessous : touchez une suggestion pour la choisir directement au lieu de tout taper vous-même.</p>
+          <p>Pour aller encore plus vite, deux boutons sont proposés à côté : <strong>"Dans 2 sem. (à recontacter)"</strong> et <strong>"Dans 1 mois (à revisiter)"</strong>. En appuyant sur l'un de ces boutons, les deux cases (texte et date) se remplissent automatiquement pour vous, sans avoir besoin de calculer la date vous-même. Vous restez bien sûr libre de choisir une autre date à la main si vous préférez.</p>
+          <p>Une fois qu'une action est programmée et enregistrée, elle apparaît directement sur la fiche de la personne sous la forme d'un petit badge (une étiquette colorée) avec l'icône ⚡, accompagné d'une petite icône crayon ✏️ à côté. Si vous touchez ce badge avec le doigt, vous pouvez modifier la date prévue ou annuler complètement cette action, sans avoir à rouvrir tout le formulaire de compte-rendu depuis le début.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">✉️ Message suggéré (1 ou plusieurs personnes)</div>
-          <p>Sur une fiche, bouton <strong>"✉️ Message suggéré"</strong> : un modèle de message adapté au suivi de cette personne s'affiche, modifiable avant l'envoi sur WhatsApp.</p>
-          <p>Pour contacter plusieurs personnes d'un coup, bouton <strong>"☑️ Message groupé WhatsApp"</strong> dans "Mes fiches" : des cases à cocher apparaissent, cochez les fiches voulues puis "Écrire le message". C'est le même système que pour une seule personne : un modèle suggéré est proposé, modifiable, et le mot <code>{prenom}</code> est remplacé automatiquement pour chacun.</p>
-          <p>Le texte n'est écrit qu'une seule fois. WhatsApp s'ouvre ensuite pour le premier contact, message déjà prêt ; vous cliquez "Envoyé, suivant" et l'app passe au contact suivant, jusqu'à la fin de la liste. WhatsApp ne permet pas d'envoi groupé automatique en un seul clic à plusieurs numéros, c'est une limite de la plateforme elle-même — ce système reste le plus rapide possible dans ce cadre.</p>
+          <div class="aide-titre">✉️ Envoyer un message suggéré (à une ou plusieurs personnes)</div>
+          <p><strong>Pour une seule personne :</strong> ouvrez sa fiche, puis touchez le bouton <strong>"✉️ Message suggéré"</strong>. L'app propose alors un texte de message tout prêt, écrit spécialement pour le suivi de cette personne. Vous pouvez modifier ce texte librement avec le clavier avant de l'envoyer. Une fois satisfait, l'app ouvre WhatsApp avec le message déjà écrit dans la conversation : il ne vous reste qu'à appuyer sur la flèche d'envoi de WhatsApp.</p>
+          <p><strong>Pour plusieurs personnes en même temps :</strong> retournez sur l'écran "Mes fiches" et touchez le texte cliquable <strong>"☑️ Message groupé WhatsApp"</strong>. Des petites cases à cocher (des carrés vides ⬜) apparaissent alors devant chaque fiche. Touchez les cases des personnes que vous voulez contacter (une coche ✅ apparaît dans la case une fois sélectionnée), puis touchez le bouton <strong>"Écrire le message"</strong> qui apparaît en bas. Un seul modèle de message est proposé, modifiable comme pour une personne seule ; le mot <code>{prenom}</code> à l'intérieur du texte sera automatiquement remplacé par le vrai prénom de chaque personne.</p>
+          <p>Le texte n'est écrit qu'une seule fois par vous. Ensuite, WhatsApp s'ouvre automatiquement pour le premier contact de la liste, message déjà prêt : vous appuyez sur envoyer dans WhatsApp, puis vous revenez dans l'app et touchez le bouton <strong>"Envoyé, suivant"</strong>. L'app passe alors au contact suivant, et ainsi de suite jusqu'à la fin de la liste. C'est un peu répétitif, mais c'est parce que WhatsApp lui-même ne permet à personne (même pas à cette app) d'envoyer un message à plusieurs numéros en un seul clic automatique — c'est une limite de WhatsApp, pas de l'app. Ce système reste malgré tout le moyen le plus rapide possible dans ce cadre.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">📞 Mes activités</div>
-          <p>Un formulaire alternatif si vous préférez choisir la fiche dans une liste déroulante plutôt que de la chercher dans "Mes fiches". Utile pour enregistrer un contact fait en dehors de l'app (par exemple après un appel reçu sans avoir l'app sous les yeux). L'historique de vos activités passées est aussi visible ici.</p>
+          <div class="aide-titre">📞 Mes activités (deuxième onglet en haut)</div>
+          <p>En haut de l'écran, sous le nom "Mon Espace", il y a plusieurs mots écrits côte à côte comme des onglets : "📂 Mes fiches", "📞 Mes activités", "📅 Agenda", "👥 Contacts". Touchez le mot <strong>"📞 Mes activités"</strong> pour changer d'écran.</p>
+          <p>Cet écran sert quand vous avez contacté quelqu'un <strong>en dehors de l'app</strong> — par exemple si vous avez reçu un appel téléphonique sans avoir votre téléphone/l'app sous les yeux pour chercher la fiche. Au lieu de chercher la personne dans "Mes fiches", vous la choisissez directement dans une liste déroulante (touchez la case "— Choisir une fiche —" pour faire apparaître la liste des noms), vous choisissez le type de contact (appel, visite, message), vous écrivez éventuellement un petit compte-rendu, et vous appuyez sur <strong>"💾 Enregistrer"</strong>.</p>
+          <p>En dessous, la liste de vos activités passées est affichée. Deux petits boutons en haut de cette liste, <strong>"30j"</strong> et <strong>"Tout"</strong>, permettent de choisir si vous voulez voir seulement les 30 derniers jours ou tout l'historique depuis le début.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">📅 Agenda</div>
-          <p>Vue d'ensemble par période : en retard, aujourd'hui, cette semaine, plus tard. Un tap sur une échéance ouvre la fiche pour y enregistrer le compte-rendu.</p>
-          <p>C'est aussi ici que vous indiquez votre disponibilité pour accompagner une visite mensuelle d'un autre évangéliste.</p>
+          <div class="aide-titre">📅 Agenda (troisième onglet en haut)</div>
+          <p>Touchez le mot <strong>"📅 Agenda"</strong> en haut de l'écran pour ouvrir cet onglet. Il regroupe plusieurs choses utiles :</p>
+          <p><strong>🤝 "Disponible pour accompagner une visite" :</strong> un interrupteur (un petit rectangle arrondi avec un rond blanc dedans) que vous pouvez faire glisser ou toucher pour l'allumer ou l'éteindre. Quand il est allumé (coloré), les autres évangélistes de votre zone savent qu'ils peuvent vous demander de les accompagner pour une visite mensuelle. Si vous le désactivez, l'app vous demande d'écrire la raison et jusqu'à quelle date vous serez indisponible ; passé cette date, l'interrupteur se rallume tout seul automatiquement, vous n'avez rien à faire pour le réactiver.</p>
+          <p><strong>🔔 "Notifications sur ce téléphone" :</strong> si ce bloc apparaît avec un bouton <strong>"Activer"</strong>, touchez-le pour autoriser l'app à vous envoyer des alertes même quand elle est fermée (rappels, annonces de la responsable...). Votre téléphone vous demandera probablement de confirmer une fois, c'est normal.</p>
+          <p>Plus bas, les <strong>sorties collectives</strong> à venir sont affichées ici si la responsable en a publié une (détails dans la section suivante), puis un <strong>bandeau coloré</strong> affiche la date du jour, et enfin la <strong>liste de vos échéances</strong> classées par période : en retard, aujourd'hui, cette semaine, plus tard. Touchez n'importe quelle échéance de cette liste pour ouvrir directement la fiche correspondante et y écrire votre compte-rendu.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">🚌 Sorties collectives</div>
-          <p>Quand la responsable publie une sortie, vous recevez une invitation. Répondez "Je viens" ou "Je ne peux pas" directement depuis l'app. Après la sortie, un compte-rendu peut être ajouté (contacts rencontrés, remarques).</p>
+          <p>Une "sortie collective" est une activité organisée par la responsable pour plusieurs évangélistes ensemble (par exemple une sortie d'évangélisation dans un quartier). Quand la responsable en publie une, elle apparaît automatiquement dans votre onglet <strong>"📅 Agenda"</strong>, avec deux boutons : <strong>"Je viens"</strong> et <strong>"Je ne peux pas"</strong>. Touchez celui qui correspond à votre réponse — un seul suffit, pas besoin de confirmer ailleurs.</p>
+          <p>Après que la sortie a eu lieu, un bouton vous permet d'ajouter un petit compte-rendu (par exemple qui vous avez rencontré, ou une remarque utile pour la responsable). Ce n'est pas obligatoire, mais ça aide la commission à garder une trace.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">👥 Contacts</div>
-          <p>La liste de tous les évangélistes actifs de la commission, avec un bouton pour appeler ou écrire sur WhatsApp en un clic, sans avoir à chercher le numéro ailleurs.</p>
+          <div class="aide-titre">👥 Contacts (quatrième onglet en haut)</div>
+          <p>Touchez le mot <strong>"👥 Contacts"</strong> en haut de l'écran. Vous verrez la liste de tous les autres évangélistes actifs de la commission. À côté de chaque nom, il y a des petites icônes (téléphone 📞 et/ou WhatsApp) : touchez l'icône pour appeler directement la personne ou lui écrire sur WhatsApp, sans avoir besoin de chercher son numéro ailleurs ou de le recopier.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">🔔 Notifications</div>
-          <p>Une cloche interne à l'app vous prévient d'un rappel ou d'une action de la responsable, visible dès l'ouverture. Si vous avez autorisé les notifications sur votre téléphone, une bannière peut aussi s'afficher même app fermée. Ça fonctionne mieux une fois l'app installée (voir plus bas), surtout sur iPhone.</p>
-          <p>Un petit chiffre rouge peut aussi apparaître directement sur l'icône de l'app, sur l'écran d'accueil du téléphone, indiquant combien de fiches sont en retard, sans même avoir besoin d'ouvrir l'app.</p>
+          <div class="aide-titre">🔔 Les notifications (les alertes)</div>
+          <p>Une "notification", c'est simplement un petit message d'alerte qui vous prévient que quelque chose s'est passé, sans que vous ayez besoin de vérifier vous-même. Il y en a deux sortes ici : une <strong>cloche interne à l'app</strong> (vous la voyez dès que vous ouvrez l'app, elle vous signale un rappel ou une action de la responsable), et une <strong>bannière sur votre téléphone</strong> qui peut apparaître même quand l'app est fermée, si vous avez autorisé les notifications (voir "Agenda" ci-dessus).</p>
+          <p>Ces notifications sur le téléphone fonctionnent mieux, et sont même indispensables sur iPhone, une fois que l'app est <strong>installée</strong> (voir la section suivante juste en dessous).</p>
+          <p>Un petit chiffre rouge (on appelle ça un "badge") peut aussi apparaître directement sur l'icône de l'app, sur l'écran d'accueil de votre téléphone (là où sont rangées toutes vos applications) : ce chiffre indique combien de fiches sont en retard, sans même avoir besoin d'ouvrir l'app pour le savoir.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">📲 Installer l'application</div>
-          <p>Bouton 📲 en haut de l'écran : l'app s'installe comme une vraie application, avec une icône sur l'écran d'accueil du téléphone. Elle s'ouvre plus vite et les notifications fonctionnent mieux, surtout sur iPhone où c'est indispensable pour les recevoir.</p>
-          <p>Quand une mise à jour est disponible, une bannière apparaît en haut de l'écran avec un bouton "Mettre à jour" : vous choisissez le moment, l'app ne se recharge jamais toute seule en pleine saisie.</p>
+          <div class="aide-titre">📲 Installer l'application sur votre téléphone</div>
+          <p>Tout en haut de l'écran, à côté du point d'interrogation ❓, il y a un bouton avec une petite icône de téléphone (📲). Touchez-le : votre téléphone va vous proposer d'ajouter l'app à votre écran d'accueil, comme une vraie application que vous téléchargeriez sur un store. Acceptez la proposition. Une icône apparaîtra alors sur l'écran d'accueil de votre téléphone, exactement comme n'importe quelle autre application, et vous pourrez l'ouvrir directement de là, sans repasser par un navigateur internet.</p>
+          <p>Une fois installée, l'app s'ouvre plus vite, et les notifications fonctionnent nettement mieux — sur iPhone, cette installation est même indispensable pour recevoir la moindre notification.</p>
+          <p>Quand une nouvelle version de l'app est disponible, une bannière apparaît toute seule en haut de l'écran avec un bouton <strong>"Mettre à jour"</strong>. Rien ne vous oblige à appuyer dessus tout de suite : vous choisissez le moment qui vous arrange, l'app ne se recharge jamais toute seule pendant que vous êtes en train d'écrire quelque chose.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">🌙 Mode sombre & autres réglages</div>
-          <p>Le bouton 🌙 en haut bascule entre affichage clair et sombre. Vos réglages restent mémorisés d'une session à l'autre.</p>
+          <div class="aide-titre">🌙 🚪 Les boutons tout en haut de l'écran</div>
+          <p>En haut de chaque écran, à droite, se trouvent plusieurs petits boutons ronds côte à côte :</p>
+          <p><strong>🌙 (une lune) :</strong> touchez ce bouton pour basculer entre un affichage clair (fond blanc) et un affichage sombre (fond noir), selon ce qui vous fatigue le moins les yeux. Votre choix reste mémorisé la prochaine fois que vous rouvrez l'app, vous n'avez pas besoin de le refaire à chaque fois.</p>
+          <p><strong>❓ (le point d'interrogation) :</strong> c'est exactement le bouton que vous venez de toucher pour ouvrir ce guide d'aide que vous êtes en train de lire.</p>
+          <p><strong>🚪 "Déconnexion" :</strong> touchez ce bouton quand vous voulez quitter votre compte et revenir à l'écran de connexion (par exemple si vous prêtez votre téléphone à quelqu'un, ou si vous voulez vous reconnecter avec un autre compte). Vos données ne sont jamais perdues, il faudra juste retaper votre mot de passe pour vous reconnecter.</p>
         </div>
       </div>
 
       <div id="aide-contenu-resp" style="display:none;">
         <div class="aide-section">
           <div class="aide-titre">📂 Fiches</div>
-          <p>Vue de toutes les fiches de la commission, tous évangélistes confondus. Un tap sur une fiche l'ouvre en entier : coordonnées, évangéliste assigné, historique complet des contacts, observations.</p>
-          <p>Filtres disponibles en haut : statut de suivi, évangéliste, zone, école, statut église. Le filtre <strong>"⚠️ Infos manquantes"</strong> repère d'un coup les fiches où il manque téléphone, nationalité, quartier, sexe ou évangéliste assigné, utile pour compléter la base au fil du temps.</p>
+          <p>C'est le premier onglet, tout en haut de l'écran (les onglets sont les mots écrits côte à côte : "📂 Fiches", "📊 Analytics", "📞 Suivi"...). Il montre <strong>toutes</strong> les fiches de la commission, celles de tous les évangélistes réunis, pas seulement les vôtres.</p>
+          <p>En haut de la liste, plusieurs <strong>filtres</strong> (des menus déroulants qu'on touche pour choisir une option) permettent d'afficher seulement une partie des fiches : par statut de suivi, par évangéliste assigné, par zone, par école, ou par statut église. Un filtre particulier, <strong>"⚠️ Infos manquantes"</strong>, repère en un instant les fiches où il manque une information importante (le téléphone, la nationalité, le quartier, le sexe, ou l'évangéliste assigné) — pratique pour compléter petit à petit la base de données sans avoir à tout relire.</p>
+          <p>Pour ouvrir une fiche en entier (les coordonnées, l'évangéliste qui s'en occupe, tout l'historique des contacts, les observations), il suffit de <strong>toucher le rectangle de cette fiche</strong> avec le doigt, exactement comme pour une simple liste.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">📊 Analytics</div>
-          <p>Statistiques globales de la commission : nombre de fiches, visites, activités par période. Dans le sous-onglet <strong>"👥 Évangélistes"</strong>, le détail par évangéliste est présenté par ordre alphabétique, volontairement sans classement ni comparaison entre personnes.</p>
-          <p>Ce détail peut aussi être <strong>envoyé par email</strong> (avec choix du niveau de détail, comme les autres rapports) ou <strong>imprimé</strong>, via les deux boutons en bas de ce sous-onglet.</p>
+          <div class="aide-titre">📊 Analytics (les statistiques)</div>
+          <p>Cet onglet affiche des chiffres globaux sur toute la commission : le nombre de fiches, le nombre de visites, le nombre d'activités, selon la période choisie.</p>
+          <p>À l'intérieur de cet onglet, il y a un sous-onglet <strong>"👥 Évangélistes"</strong> (un onglet à l'intérieur d'un autre onglet) qui montre le détail de chaque évangéliste, un par un, classés simplement par ordre alphabétique — volontairement <strong>sans</strong> classement du "meilleur" au "moins bon", pour ne comparer personne.</p>
+          <p>En bas de ce sous-onglet, deux boutons : l'un permet d'<strong>envoyer ce détail par email</strong> (une fenêtre s'ouvre pour choisir l'adresse et le niveau de détail, comme pour les autres rapports plus bas dans ce guide), l'autre permet de l'<strong>imprimer</strong> directement sur une imprimante ou de l'enregistrer en PDF selon votre appareil.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">📞 Suivi</div>
-          <p>Une barre de progression par évangéliste (fiches visitées sur total assigné) et la liste des retards en cours. Un formulaire rapide permet aussi d'enregistrer vous-même une activité si besoin, avec les mêmes suggestions de prochaine action que côté évangéliste.</p>
+          <p>Cet onglet montre, pour chaque évangéliste, une petite barre de progression qui se remplit selon le nombre de fiches déjà visitées par rapport au nombre total qui lui est confié — un simple coup d'œil suffit pour voir qui avance bien. En dessous, la liste des retards en cours est affichée, pour repérer rapidement ce qui doit être relancé.</p>
+          <p>Un petit formulaire rapide est aussi présent sur cet écran : il vous permet d'enregistrer vous-même une activité (un appel ou une visite qu'un évangéliste vous aurait rapportée oralement, par exemple), avec les mêmes boutons de suggestion de prochaine action que côté évangéliste ("Dans 2 semaines", "Dans 1 mois"...).</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">🗺️ Équipes</div>
-          <p>Gestion des zones géographiques et carte de répartition des évangélistes sur Fès. Chaque évangéliste est rattaché à une zone dans son profil.</p>
+          <p>Il n'y a pas de carte géographique ici : cet onglet affiche des <strong>colonnes</strong>, une par zone (par exemple "Bensouda", "Atlas"...), un peu comme un tableau à catégories. Chaque fiche est rangée <strong>toute seule</strong> dans la bonne colonne, simplement en regardant le mot écrit dans son champ "Quartier" et en le comparant aux zones que vous avez définies — vous n'avez rien à classer manuellement.</p>
+          <p>Sous le titre, une petite barre colorée de points apparaît sur chaque colonne : elle donne en un coup d'œil la proportion de fiches déjà visitées (vert), en cours (orange) et pas encore commencées (gris) dans cette zone.</p>
+          <p>Plus bas, le bloc <strong>"Quartiers non attribués"</strong> liste les noms de quartiers trouvés dans les fiches mais qui ne correspondent encore à aucune zone : utile pour repérer un quartier oublié et l'ajouter à une zone.</p>
+          <p>Tout en haut, un bandeau <strong>"⚙️ Gestion des zones"</strong> avec un bouton <strong>"Gérer ▾"</strong> à droite : touchez ce bouton pour déplier le panneau où créer une nouvelle zone (un nom, une petite icône, et la liste des quartiers qu'elle couvre, séparés par des virgules — les majuscules et accents n'ont pas d'importance) ou modifier une zone déjà existante.</p>
+          <p>Chaque évangéliste a sa propre zone principale, choisie dans son profil (onglet "👥 Évangélistes" plus bas), et peut aussi avoir des zones secondaires en plus. C'est ce qui sert de base pour recommander un évangéliste quand une nouvelle fiche est créée dans un quartier donné.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">🚌 Sorties</div>
-          <p>Créez une sortie collective (lieu, date, description) : l'invitation part automatiquement vers Communications pour chaque évangéliste actif. Un filtre "À venir / Historique" sépare les sorties déjà passées. Les comptes-rendus ajoutés par les évangélistes sont consultables ici.</p>
+          <div class="aide-titre">🚶 Sorties (créer une sortie collective)</div>
+          <p>C'est ici que vous créez une <strong>sortie collective</strong> : une activité organisée pour plusieurs évangélistes en même temps. Un petit formulaire vous demande le lieu, la date, et une description libre. Une fois rempli, touchez le bouton <strong>"📢 Publier et notifier les évangélistes"</strong> : l'invitation part alors automatiquement vers chaque évangéliste actif, via l'onglet "📬 Communications" décrit juste après.</p>
+          <p>Deux boutons au-dessus de la liste des sorties, <strong>"📅 À venir"</strong> et <strong>"🗂️ Historique"</strong>, permettent de séparer les sorties qui n'ont pas encore eu lieu de celles déjà passées. Chaque évangéliste peut répondre "Je viens" ou "Je ne peux pas" depuis son propre écran ; leurs réponses sont visibles ici. Après la sortie, les comptes-rendus ajoutés par les évangélistes (qui ils ont rencontré, leurs remarques) sont aussi consultables sur cet écran.</p>
+          <p>Une petite icône poubelle (🗑️) à côté d'une sortie permet de la <strong>supprimer complètement</strong> ; l'app vous demande toujours de confirmer avant de le faire, pour éviter une suppression accidentelle.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">📬 Communications</div>
-          <p>C'est le centre d'envoi de tous les rappels : hebdomadaire, visite mensuelle, action prévue (48h avant une date programmée), et sortie collective. Chaque rappel arrive ici <strong>par évangéliste</strong>, en attente de validation.</p>
-          <p>Rien ne part automatiquement. Vous lisez le texte, le modifiez si besoin, puis cliquez séparément sur <strong>"Envoyer l'email"</strong> et <strong>"Envoyer la notification"</strong> : les deux canaux sont indépendants, vous pouvez envoyer l'un sans l'autre.</p>
-          <p>La notification "cloche" arrive immédiatement dans l'app de l'évangéliste. La bannière sur son téléphone, elle, part au passage suivant du script automatique (habituellement quelques minutes), car elle a besoin d'une clé technique que seul le serveur possède, pas le navigateur.</p>
-          <p>Vous pouvez aussi composer un <strong>message manuel libre</strong>, à un évangéliste précis ou à tous les actifs d'un coup, sans attendre un rappel automatique.</p>
-          <p>Une fois traitée, chaque communication passe dans l'<strong>historique</strong>, où vous pouvez la renvoyer (🔁, elle repart en file d'attente modifiable) ou la supprimer définitivement (🗑️). La sélection multiple permet de supprimer plusieurs entrées d'un coup.</p>
+          <div class="aide-titre">📬 Communications (le centre d'envoi)</div>
+          <p>C'est ici qu'arrivent, en attente, <strong>tous</strong> les rappels que l'app prépare automatiquement : le rappel hebdomadaire, le rappel de visite mensuelle, le rappel d'une action prévue (48 heures avant la date programmée), et l'invitation à une sortie collective. Chaque rappel est préparé séparément pour chaque évangéliste, et rien n'est jamais envoyé tout seul sans votre accord — c'est vous qui décidez.</p>
+          <p>Pour chaque message en attente, vous pouvez d'abord <strong>lire le texte et le modifier</strong> si vous le souhaitez (touchez simplement le texte pour faire apparaître le clavier). Ensuite, deux boutons séparés apparaissent : <strong>"📧 Envoyer l'email"</strong> et <strong>"🔔 Envoyer la notification"</strong>. Ce sont deux boutons bien distincts et indépendants l'un de l'autre : vous pouvez appuyer sur l'un sans appuyer sur l'autre, selon ce que vous voulez envoyer. Une fois qu'un envoi est fait, le bouton correspondant change et affiche "✅ Email envoyé" ou "✅ Notif envoyée" à la place, pour vous montrer que c'est fait.</p>
+          <p>La notification "cloche" arrive tout de suite dans l'app de l'évangéliste dès que vous appuyez sur le bouton. La bannière qui apparaît directement sur son téléphone (même app fermée), elle, met parfois quelques minutes à arriver : c'est normal, elle a besoin d'un passage automatique d'un petit programme technique sur le serveur, que votre navigateur seul ne peut pas déclencher instantanément.</p>
+          <p>Vous pouvez aussi, à tout moment, composer un <strong>message manuel libre</strong> — c'est-à-dire écrit entièrement par vous, sans attendre un rappel automatique. Choisissez le destinataire (un évangéliste précis, ou "tous les actifs" pour l'envoyer à tout le monde d'un coup) dans la liste déroulante, écrivez un objet et le texte du message, puis touchez le bouton <strong>"➕ Ajouter à la file d'envoi"</strong>. Le message rejoint alors la liste d'attente comme les autres, et vous l'envoyez ensuite de la même façon (boutons email/notification séparés).</p>
+          <p>Une fois qu'une communication a été envoyée (ou traitée d'une autre façon), elle passe automatiquement dans un <strong>historique</strong>, plus bas sur l'écran. Dans cet historique, une petite icône avec deux flèches en cercle (🔁) permet de <strong>la renvoyer</strong> — elle repart alors en file d'attente, modifiable comme au départ. Une icône poubelle (🗑️) permet de la <strong>supprimer définitivement</strong>. Il est aussi possible de cocher plusieurs entrées à la fois (des petites cases à cocher apparaissent) pour toutes les supprimer d'un seul coup plutôt qu'une par une.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">👥 Évangélistes</div>
-          <p>Ajout, modification et désactivation des comptes évangélistes. Un évangéliste désactivé disparaît de cette liste et des sélecteurs, mais ses fiches et son historique restent conservés.</p>
+          <p>Cet onglet sert à gérer les comptes des évangélistes : un bouton permet d'en <strong>ajouter un nouveau</strong> (vous remplissez son nom, son numéro, la zone qui lui est attribuée...), et pour chaque évangéliste déjà existant, vous pouvez <strong>modifier</strong> ses informations ou le <strong>désactiver</strong> s'il ne fait plus partie de la commission.</p>
+          <p>Un évangéliste désactivé disparaît simplement de cette liste et des menus déroulants ailleurs dans l'app (par exemple, on ne pourra plus lui attribuer de nouvelle fiche) — mais rassurez-vous, toutes ses fiches passées et tout son historique restent conservés quelque part, rien n'est effacé.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">📇 Contacts équipe</div>
-          <p>Appelez ou écrivez sur WhatsApp n'importe quel évangéliste en un clic. Le bloc <strong>"🔔 À relancer personnellement"</strong> liste ceux sans activité enregistrée depuis 7 jours ou plus, triés du plus inactif au moins. Un message de relance pré-rempli s'ouvre directement sur WhatsApp : un rappel humain de votre part est souvent plus efficace qu'une notification automatique de plus.</p>
+          <p>Cet écran liste tous les évangélistes, avec à côté de chaque nom des petites icônes pour les <strong>appeler</strong> ou leur <strong>écrire sur WhatsApp</strong> en un seul geste, sans avoir à chercher ou recopier leur numéro de téléphone.</p>
+          <p>Un bloc particulier, intitulé <strong>"🔔 À relancer personnellement"</strong>, liste les évangélistes qui n'ont enregistré aucune activité depuis 7 jours ou plus, triés du plus inactif au moins inactif, pour vous aider à savoir qui relancer en priorité. Un message pré-rempli s'ouvre automatiquement dans WhatsApp quand vous touchez le bouton correspondant : un message personnel de votre part est souvent plus efficace pour motiver que la énième notification automatique de l'app.</p>
         </div>
 
         <div class="aide-section">
           <div class="aide-titre">📧 Rapports</div>
-          <p>Rapports hebdomadaire, mensuel et annuel envoyés par email à l'adresse de votre choix, au format détaillé ou résumé. Le déclenchement est toujours manuel, jamais automatique.</p>
+          <p>Depuis cet écran (ou depuis le bouton correspondant dans l'onglet Analytics), vous pouvez générer un rapport <strong>hebdomadaire</strong>, <strong>mensuel</strong> ou <strong>annuel</strong>, envoyé par email à l'adresse de votre choix. Vous choisissez aussi le niveau de détail : un format <strong>détaillé</strong> (toutes les informations) ou un format <strong>résumé</strong> (juste l'essentiel). Ces rapports ne partent jamais tout seuls : c'est toujours vous qui déclenchez leur envoi en touchant le bouton correspondant, jamais l'app automatiquement.</p>
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">🔐 Sécurité & réglages</div>
-          <p>Le bouton 🔐 en haut permet de changer le mot de passe responsable. Le bouton 📋 ouvre le formulaire public d'accueil (utilisable pour créer une fiche sur place, par exemple lors d'un accueil au culte). Le bouton 🌙 bascule l'affichage clair/sombre.</p>
+          <div class="aide-titre">🔐 🌙 📋 Les boutons tout en haut de l'écran</div>
+          <p>En haut de l'écran, à droite, se trouvent plusieurs petits boutons ronds côte à côte :</p>
+          <p><strong>🌙 (une lune) :</strong> touchez ce bouton pour basculer entre un affichage clair (fond blanc) et un affichage sombre (fond noir). Votre choix reste mémorisé pour la prochaine fois que vous rouvrez l'app.</p>
+          <p><strong>🔐 (un cadenas) :</strong> touchez ce bouton pour ouvrir la fenêtre qui vous permet de <strong>changer votre mot de passe responsable</strong>. On vous demandera de taper l'ancien mot de passe puis le nouveau, deux fois pour éviter une faute de frappe.</p>
+          <p><strong>📋 "Formulaire" :</strong> ce bouton ouvre le <strong>formulaire public d'accueil</strong>, celui que n'importe qui peut remplir pour créer une nouvelle fiche. Il est très utile sur place, par exemple pendant un accueil au culte, pour enregistrer directement une personne intéressée sur votre téléphone ou une tablette, sans passer par l'espace responsable habituel.</p>
+          <p><strong>❓ (le point d'interrogation) :</strong> c'est le bouton que vous venez de toucher pour ouvrir ce guide d'aide.</p>
         </div>
       </div>
 
