@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#7B1111">
-<title>Commission Témoignage — Paroisse de Fès v9</title>
+<title>Commission Témoignage — Paroisse de Fès </title>
 
 <!-- ── PWA : installable sur PC, Android, iOS ─────────────── -->
 <link rel="manifest" href="manifest.json">
@@ -2076,7 +2076,12 @@ body .animate, body .spinner, body [class*="anim"] {
           <input type="datetime-local" id="comm-manuel-programme" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
           <div style="font-size:11px;color:var(--mu);margin-top:4px;">Laissez vide pour l'ajouter immédiatement à la file. Sinon, le message reste caché dans un onglet "Programmés" jusqu'à cette date — vous garderez toujours la main pour cliquer "Envoyer" à ce moment-là.</div>
         </div>
-        <button class="btn btn-primary btn-full" id="comm-manuel-btn" onclick="envoyerCommunicationManuelle()" style="margin-top:12px;">➕ Ajouter à la file d'envoi</button>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button class="btn" style="flex:1;" id="comm-manuel-btn" onclick="envoyerCommunicationManuelle()">➕ Ajouter à la file d'envoi</button>
+          <button class="btn btn-primary" style="flex:1;" id="comm-manuel-btn-now" onclick="envoyerCommunicationManuelleMaintenant()">📤 Envoyer maintenant</button>
+        </div>
+        <div style="font-size:11px;color:var(--mu);margin-top:6px;">"Envoyer maintenant" part tout de suite (email + notification interne), sans étape de validation. "Ajouter à la file" garde l'ancien fonctionnement : le message reste modifiable dans la file d'attente ci-dessous jusqu'à ce que vous cliquiez sur Envoyer.</div>
+
       </div>
 
       <div class="card" style="padding:18px;margin-bottom:14px;">
@@ -3827,31 +3832,6 @@ function suggererProchaineAction(ficheId, joursPlusTard, label) {
   champDate.value = d.toISOString().split('T')[0];
 }
 
-/* ── Modifier ou annuler une action déjà programmée, sans repasser
-   par tout le formulaire de compte-rendu. ── */
-async function modifierProchaineAction(ficheId, event) {
-  if (event) event.stopPropagation();
-  const fiche = (S.myFiches || []).find(f => f.id === ficheId);
-  if (!fiche) return;
-  const actionActuelle = fiche.nextAction || '';
-  const dateActuelle = fiche.nextActionDate || '';
-  const nouvelleAction = prompt('Modifier l\'action prévue (laisser vide pour annuler) :', actionActuelle);
-  if (nouvelleAction === null) return; // annulé par l'utilisateur
-  let nouvelleDate = '';
-  if (nouvelleAction.trim()) {
-    const saisie = prompt('Date prévue (AAAA-MM-JJ) :', dateActuelle || new Date().toISOString().split('T')[0]);
-    if (saisie === null) return;
-    nouvelleDate = saisie.trim();
-  }
-  try {
-    await window._completeAction(ficheId, null, null, nouvelleAction.trim() || null, nouvelleDate || null, whoAmI());
-    toast(nouvelleAction.trim() ? '✅ Action mise à jour' : '✅ Action annulée');
-  } catch (e) {
-    console.error(e);
-    toast('❌ Erreur');
-  }
-}
-
 async function quickLogActivity(ficheId, type, event) {
   if (event) event.stopPropagation();
   const fiche = (S.fiches || []).find(f => f.id === ficheId) || (S.myFiches || []).find(f => f.id === ficheId);
@@ -4147,27 +4127,27 @@ function normalizeStr(s) {
 
 function getEquipeForQuartier(quartier) {
   if (!quartier) return null;
-  const q = normalizeStr(quartier);
-  // Chercher dans les zones dynamiques (S.zones)
+  const q = normalizeStr(quartier).trim();
+  if (!q) return null;
   if (S.zones && S.zones.length) {
+    // 1) Priorité : la liste de quartiers couverts ("keywords") définie pour chaque zone.
+    //    Comparaison dans LES DEUX SENS (inclusion quartier→mot-clé ET mot-clé→quartier),
+    //    car un quartier saisi en version courte (ex: "Rouadi") ne contenait jamais
+    //    l'intégralité d'un mot-clé plus long (ex: "Sebaa Rouadi") avec l'ancienne
+    //    vérification à sens unique — ce qui faisait passer à tort des quartiers
+    //    pourtant attribués dans la liste "Quartiers non attribués".
+    for (const z of S.zones) {
+      if (!z.keywords) continue;
+      const kws = z.keywords.split(',').map(k => normalizeStr(k.trim())).filter(Boolean);
+      if (kws.some(k => k.length > 2 && (q.includes(k) || k.includes(q)))) return z.nom;
+    }
+    // 2) Repli : correspondance avec le nom complet de la zone elle-même (pas de découpage
+    //    en mots isolés, pour éviter les faux positifs sur des mots trop courts/génériques).
     for (const z of S.zones) {
       const zNom = normalizeStr(z.nom);
-      const mots = zNom.split(/[\s\-,]+/);
-      // Correspondance directe ou partielle
-      if (mots.some(m => m.length > 2 && q.includes(m)) || q.includes(zNom) || zNom.includes(q)) {
-        return z.nom;
-      }
-      // Vérifier les mots-clés associés à la zone
-      if (z.keywords) {
-        const kws = z.keywords.split(',').map(k => normalizeStr(k.trim())).filter(Boolean);
-        if (kws.some(k => k.length > 2 && q.includes(k))) return z.nom;
-      }
+      if (zNom && (q === zNom || q.includes(zNom) || zNom.includes(q))) return z.nom;
     }
   }
-  // Fallback : règles de base pour Fès (compatibilité anciennes données)
-  if (/euromed|sebaa rouadi|sebaa|rouadi|chaima/i.test(q)) return null; // zones nouvelles sans fallback
-  if (/atlas|montfleuri|mont fleuri|narjiss|lido/i.test(q)) return null;
-  if (/bensouda/i.test(q)) return null;
   return null;
 }
 
@@ -5942,7 +5922,7 @@ function renderEvFicheCard(f) {
     + '<div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;">'
     + suiviBadge
     + statutBadge
-    + (f.nextActionDate ? '<span class="vbadge ' + (f.nextActionDate < today ? 'vb-late' : 'vb-ok') + '" style="cursor:pointer;" onclick="modifierProchaineAction(\'' + f.id + '\', event)" title="Modifier ou annuler">\u26a1 ' + (f.nextAction||'Action') + ' \u00b7 ' + f.nextActionDate + ' \u270f\ufe0f</span>' : '')
+    + (f.nextActionDate ? '<span class="vbadge ' + (f.nextActionDate < today ? 'vb-late' : 'vb-ok') + '">\u26a1 ' + (f.nextAction||'Action') + ' \u00b7 ' + f.nextActionDate + '</span>' : '')
     + '</div>'
     + (!selectionMode ? contactBtns + quickBtns : '')
     + '</div>'
@@ -6596,6 +6576,80 @@ async function envoyerCommunicationManuelle() {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '➕ Ajouter à la file d\'envoi'; }
   }
+}
+
+/* ── Envoi manuel IMMÉDIAT : un seul clic, pas d'étape de validation.
+   Envoie l'email (EmailJS) et la notification interne (cloche 🔔) tout
+   de suite, puis classe directement la communication dans l'historique.
+   Le push "physique" sur le téléphone suit ensuite via le script
+   automatique, comme pour les autres communications (voir remarque
+   dans envoyerCommunicationNotif). ── */
+async function envoyerCommunicationManuelleMaintenant() {
+  const sel     = document.getElementById('comm-manuel-dest');
+  const texte   = document.getElementById('comm-manuel-texte')?.value.trim();
+  const objet   = document.getElementById('comm-manuel-objet')?.value.trim();
+  const btn     = document.getElementById('comm-manuel-btn-now');
+  if (!texte) { toast('⚠️ Écrivez un message avant d\'envoyer'); return; }
+  const destId  = sel?.value;
+  const actifs  = (S.evs || []).filter(e => e.actif !== false && e.email);
+  const cibles  = destId === '__tous__' ? actifs : actifs.filter(e => e.id === destId);
+  if (!cibles.length) { toast('❌ Aucun destinataire valide (email manquant ?)'); return; }
+  if (!confirm(`Envoyer immédiatement à ${cibles.length} évangéliste(s) ? Le message part tout de suite, sans passer par la file d'attente.`)) return;
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Envoi…'; }
+  const badge   = objet ? `✍️ ${objet}` : '📧 Communication';
+  const htmlMsg = _buildCommunicationHTML(badge, texte);
+  const ts = Date.now();
+  let okCount = 0, errCount = 0;
+
+  for (const ev of cibles) {
+    const id = `manuel_${ts}_${ev.id}`;
+    try {
+      await window._upsertCommunication(id, {
+        type:          'manuel',
+        evId:          ev.id,
+        evNom:         ev.nom,
+        evEmail:       ev.email,
+        cle:           `manuel_${ts}`,
+        contenu:       texte,
+        objet:         objet || null,
+        programmePour: null,
+        statut:        'attente',
+        emailEnvoye:   false,
+        notifEnvoyee:  false,
+        pushDemande:   false,
+        createdAt:     firebase.firestore.FieldValue.serverTimestamp()
+      });
+      if (ev.email) {
+        await _ejsSend(_EJS.service, _EJS.templateRapport, {
+          to_email:        ev.email,
+          action:          htmlMsg,
+          ficheNom:        `${badge} — ${ev.nom || ''}`,
+          evNom:           'Commission Témoignage — Paroisse de Fès',
+          prochaineAction: texte,
+          email:           ev.email
+        }, 'communication-manuelle-immediate');
+      }
+      await window._pushNotif(ev.id, `${badge} — voir l'app pour le détail.`, 'manuel');
+      await window._envoyerCommunication(id, {
+        emailEnvoye:   !!ev.email,
+        notifEnvoyee:  true,
+        pushDemande:   true,
+        pushDemandeAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      okCount++;
+    } catch (e) {
+      console.error(e);
+      errCount++;
+    }
+  }
+  toast(errCount
+    ? `⚠️ Envoyé à ${okCount}, échec pour ${errCount} — vérifiez la console`
+    : `✅ Envoyé immédiatement à ${okCount} évangéliste(s) (email + notification)`);
+  document.getElementById('comm-manuel-texte').value = '';
+  document.getElementById('comm-manuel-objet').value = '';
+  document.getElementById('comm-manuel-programme').value = '';
+  if (btn) { btn.disabled = false; btn.textContent = '📤 Envoyer maintenant'; }
 }
 
 function renderSortiesCollectivesEv() {
@@ -12933,7 +12987,7 @@ if (_origInitDash) {
           <p>Toujours dans le formulaire de compte-rendu, en dessous du texte, il y a deux petites cases supplémentaires : une case de texte où vous pouvez écrire ce que vous comptez faire ensuite (par exemple "Rappeler" ou "Inviter au culte"), et une case de date, où vous choisissez le jour où vous prévoyez de le faire.</p>
           <p>Pendant que vous tapez dans la case de texte, une petite liste de suggestions apparaît en dessous : touchez une suggestion pour la choisir directement au lieu de tout taper vous-même.</p>
           <p>Pour aller encore plus vite, deux boutons sont proposés à côté : <strong>"Dans 2 sem. (à recontacter)"</strong> et <strong>"Dans 1 mois (à revisiter)"</strong>. En appuyant sur l'un de ces boutons, les deux cases (texte et date) se remplissent automatiquement pour vous, sans avoir besoin de calculer la date vous-même. Vous restez bien sûr libre de choisir une autre date à la main si vous préférez.</p>
-          <p>Une fois qu'une action est programmée et enregistrée, elle apparaît directement sur la fiche de la personne sous la forme d'un petit badge (une étiquette colorée) avec l'icône ⚡, accompagné d'une petite icône crayon ✏️ à côté. Si vous touchez ce badge avec le doigt, vous pouvez modifier la date prévue ou annuler complètement cette action, sans avoir à rouvrir tout le formulaire de compte-rendu depuis le début.</p>
+          <p>Une fois qu'une action est programmée et enregistrée, elle apparaît directement sur la fiche de la personne sous la forme d'un petit badge (une étiquette colorée) avec l'icône ⚡. Ce badge n'est qu'un rappel visuel : il ne peut plus être modifié ou annulé directement. Pour changer la prochaine action, repassez par un nouveau compte-rendu.</p>
         </div>
 
         <div class="aide-section">
@@ -13034,7 +13088,7 @@ if (_origInitDash) {
           <p>C'est ici qu'arrivent, en attente, <strong>tous</strong> les rappels que l'app prépare automatiquement : le rappel hebdomadaire, le rappel de visite mensuelle, le rappel d'une action prévue (48 heures avant la date programmée), et l'invitation à une sortie collective. Chaque rappel est préparé séparément pour chaque évangéliste, et rien n'est jamais envoyé tout seul sans votre accord — c'est vous qui décidez.</p>
           <p>Pour chaque message en attente, vous pouvez d'abord <strong>lire le texte et le modifier</strong> si vous le souhaitez (touchez simplement le texte pour faire apparaître le clavier). Ensuite, deux boutons séparés apparaissent : <strong>"📧 Envoyer l'email"</strong> et <strong>"🔔 Envoyer la notification"</strong>. Ce sont deux boutons bien distincts et indépendants l'un de l'autre : vous pouvez appuyer sur l'un sans appuyer sur l'autre, selon ce que vous voulez envoyer. Une fois qu'un envoi est fait, le bouton correspondant change et affiche "✅ Email envoyé" ou "✅ Notif envoyée" à la place, pour vous montrer que c'est fait.</p>
           <p>La notification "cloche" arrive tout de suite dans l'app de l'évangéliste dès que vous appuyez sur le bouton. La bannière qui apparaît directement sur son téléphone (même app fermée), elle, met parfois quelques minutes à arriver : c'est normal, elle a besoin d'un passage automatique d'un petit programme technique sur le serveur, que votre navigateur seul ne peut pas déclencher instantanément.</p>
-          <p>Vous pouvez aussi, à tout moment, composer un <strong>message manuel libre</strong> — c'est-à-dire écrit entièrement par vous, sans attendre un rappel automatique. Choisissez le destinataire (un évangéliste précis, ou "tous les actifs" pour l'envoyer à tout le monde d'un coup) dans la liste déroulante, écrivez un objet et le texte du message, puis touchez le bouton <strong>"➕ Ajouter à la file d'envoi"</strong>. Le message rejoint alors la liste d'attente comme les autres, et vous l'envoyez ensuite de la même façon (boutons email/notification séparés).</p>
+          <p>Vous pouvez aussi, à tout moment, composer un <strong>message manuel libre</strong> — c'est-à-dire écrit entièrement par vous, sans attendre un rappel automatique. Choisissez le destinataire (un évangéliste précis, ou "tous les actifs" pour l'envoyer à tout le monde d'un coup) dans la liste déroulante, écrivez un objet et le texte du message, puis choisissez comment l'envoyer : <strong>"📤 Envoyer maintenant"</strong> l'envoie tout de suite (email + notification interne), en un seul geste, sans étape de validation supplémentaire ; <strong>"➕ Ajouter à la file d'envoi"</strong> garde l'ancien fonctionnement, où le message reste modifiable dans la liste d'attente jusqu'à ce que vous appuyiez vous-même sur "Envoyer".</p>
           <p>Une fois qu'une communication a été envoyée (ou traitée d'une autre façon), elle passe automatiquement dans un <strong>historique</strong>, plus bas sur l'écran. Dans cet historique, une petite icône avec deux flèches en cercle (🔁) permet de <strong>la renvoyer</strong> — elle repart alors en file d'attente, modifiable comme au départ. Une icône poubelle (🗑️) permet de la <strong>supprimer définitivement</strong>. Il est aussi possible de cocher plusieurs entrées à la fois (des petites cases à cocher apparaissent) pour toutes les supprimer d'un seul coup plutôt qu'une par une.</p>
         </div>
 
