@@ -54,6 +54,15 @@
  * fenêtre de 3 jours pour la visite). Le serveur applique maintenant
  * les mêmes fenêtres de rattrapage, pour ne plus dépendre d'un unique
  * passage cron qui pourrait manquer sa fenêtre.
+ *
+ * ── CORRECTIF (index Firestore) ────────────────────────────
+ * La requête de livraison des push demandés (runPushDemandes) filtrait
+ * auparavant sur DEUX champs (pushDemande == true ET pushEnvoye != true),
+ * ce qui exige un index composite Firestore. Sans cet index, la requête
+ * plantait avec "FAILED_PRECONDITION: The query requires an index",
+ * ce qui faisait échouer tout le script (❌ sur GitHub Actions). On
+ * filtre désormais pushEnvoye directement en JavaScript après une
+ * requête simple à un seul champ, qui ne nécessite aucun index.
  */
 
 const admin = require('firebase-admin');
@@ -318,13 +327,18 @@ async function runRappelActionPrevue(now) {
    Quand le/la responsable clique "Envoyer la notification" dans
    l'app, ça pose pushDemande:true. Ce script livre la vraie bannière
    téléphone à son prochain passage (la clé privée VAPID ne peut
-   vivre que côté serveur). ── */
+   vivre que côté serveur).
+   CORRECTIF : requête simplifiée à un seul champ (pushDemande==true)
+   pour ne PAS nécessiter d'index composite Firestore — le filtre sur
+   pushEnvoye se fait ensuite en mémoire, en JavaScript. ── */
 async function runPushDemandes(now) {
   const snap = await db.collection('communications_queue')
     .where('pushDemande', '==', true)
-    .where('pushEnvoye', '!=', true)
     .get();
   if (snap.empty) return;
+
+  const aTraiter = snap.docs.filter(doc => doc.data().pushEnvoye !== true);
+  if (!aTraiter.length) return;
 
   const titres = {
     hebdo:         'Rappel hebdomadaire — Commission Témoignage',
@@ -334,7 +348,7 @@ async function runPushDemandes(now) {
     manuel:        'Message — Commission Témoignage',
   };
 
-  for (const doc of snap.docs) {
+  for (const doc of aTraiter) {
     const c = doc.data();
     // Un message "manuel" programmé pour plus tard ne doit pas livrer sa
     // bannière avant sa date, même si pushDemande a été posé à l'avance.
