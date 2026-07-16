@@ -3921,12 +3921,44 @@ function majBarreSelection() {
 function ouvrirMessageGroupe() {
   const modal = document.getElementById('modal-msg-groupe');
   if (!modal) return;
+  if (!_fichesSelectionnees.size) return toast('⚠️ Aucune fiche sélectionnée');
+
+  const fiches = (S.myFiches || []).filter(f => _fichesSelectionnees.has(f.id));
+  // Le modèle suggéré se base sur la 1ère personne sélectionnée ; il reste
+  // modifiable et s'applique (personnalisé au prénom) à tout le groupe.
+  const cleSuggeree = fiches.length ? suggererModeleMessage(fiches[0]) : 'premier_contact';
+
+  const select = document.getElementById('msg-groupe-select');
+  select.innerHTML = Object.keys(MODELES_MESSAGES_SUIVI).map(cle =>
+    `<option value="${cle}" ${cle === cleSuggeree ? 'selected' : ''}>${MODELES_MESSAGES_SUIVI[cle].label}${cle === cleSuggeree ? ' — suggéré' : ''}</option>`
+  ).join('');
+
+  const texteInitial = texteModeleMessageGroupe(cleSuggeree);
+  document.getElementById('msg-groupe-texte').value = texteInitial;
+  S._msgGroupeDernierModeleTexte = texteInitial;
+
+  const titre = fiches.length === 1
+    ? `✉️ Message pour ${fiches[0].nom || ''} ${fiches[0].prenom || ''}`.trim()
+    : `✉️ Message pour ${fiches.length} personnes`;
+  document.getElementById('msg-groupe-titre').textContent = titre;
+
   document.getElementById('msg-groupe-etape-redaction').style.display = 'block';
   document.getElementById('msg-groupe-etape-envoi').style.display = 'none';
   document.getElementById('msg-groupe-etape-fin').style.display = 'none';
-  document.getElementById('msg-groupe-texte').value = '';
   document.getElementById('msg-groupe-nb-select').textContent = _fichesSelectionnees.size;
   modal.style.display = 'flex';
+}
+
+// Changement manuel de modèle : ne remplace le texte que si l'évangéliste
+// n'a pas commencé à le personnaliser (même logique que pour les comptes-rendus)
+function changerModeleMessageGroupe() {
+  const champ = document.getElementById('msg-groupe-texte');
+  const estVide = !champ.value.trim();
+  const estModeleNonModifie = champ.value === S._msgGroupeDernierModeleTexte;
+  const cle = document.getElementById('msg-groupe-select').value;
+  const nouveauTexte = texteModeleMessageGroupe(cle);
+  if (estVide || estModeleNonModifie) champ.value = nouveauTexte;
+  S._msgGroupeDernierModeleTexte = nouveauTexte;
 }
 
 function fermerMessageGroupe() {
@@ -4005,7 +4037,11 @@ function terminerEnvoiGroupe() {
   document.getElementById('msg-groupe-etape-fin').style.display = 'block';
   document.getElementById('msg-groupe-recap').textContent =
     `${_envoiGroupeEnvoyes} message(s) envoyé(s) sur ${_envoiGroupeQueue.length}.`;
-  toggleModeSelection(); // sort du mode sélection proprement
+  // Sort du mode sélection proprement si on y était (envoi depuis la
+  // sélection multiple) ; sinon (envoi rapide depuis une seule fiche),
+  // se contente de vider la sélection sans activer le mode.
+  if (_selectionModeActif) toggleModeSelection();
+  else _fichesSelectionnees.clear();
 }
 
 function renderFiches() {
@@ -5875,7 +5911,7 @@ function renderEvFicheCard(f) {
     ? '<div style="display:flex;gap:7px;margin-top:7px;" onclick="event.stopPropagation()">'
       + '<a href="tel:' + telIntl + '" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:rgba(26,107,51,0.1);border:1.5px solid rgba(26,107,51,0.25);border-radius:20px;font-size:12px;font-weight:700;color:#1A6B33;text-decoration:none;white-space:nowrap;" onclick="event.stopPropagation()">📞 Appeler</a>'
       + '<a href="https://wa.me/' + telIntl.replace('+','') + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:rgba(37,211,102,0.1);border:1.5px solid rgba(37,211,102,0.35);border-radius:20px;font-size:12px;font-weight:700;color:#128C7E;text-decoration:none;white-space:nowrap;" onclick="event.stopPropagation()">💬 WhatsApp</a>'
-      + '<button type="button" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:rgba(123,17,17,0.06);border:1.5px solid rgba(123,17,17,0.25);border-radius:20px;font-size:12px;font-weight:700;color:var(--c1);white-space:nowrap;cursor:pointer;" onclick="event.stopPropagation();ouvrirModalMessageSuivi(\'' + f.id + '\')">✉️ Message suggéré</button>'
+      + '<button type="button" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:rgba(123,17,17,0.06);border:1.5px solid rgba(123,17,17,0.25);border-radius:20px;font-size:12px;font-weight:700;color:var(--c1);white-space:nowrap;cursor:pointer;" onclick="event.stopPropagation();ouvrirMessagePourFiche(\'' + f.id + '\')">✉️ Message suggéré</button>'
       + '</div>'
     : '';
 
@@ -7484,14 +7520,25 @@ function _hashSimple(str) {
   return Math.abs(h);
 }
 
-// Remplace {prenom}, {evangeliste}, {date}, {heure} par les valeurs réelles
-function remplacerVariablesMessage(texte, f) {
+// Remplace {prenom}, {evangeliste}, {date}, {heure} par les valeurs réelles.
+// keepPrenom=true : laisse {prenom} intact (utile pour un modèle générique
+// destiné à plusieurs personnes, personnalisé ensuite contact par contact).
+function remplacerVariablesMessage(texte, f, keepPrenom) {
   const now = new Date();
-  return (texte || '')
-    .replace(/{prenom}/g, (f?.prenom || '').trim() || 'cher(e) ami(e)')
+  let out = (texte || '');
+  if (!keepPrenom) out = out.replace(/{prenom}/g, (f?.prenom || '').trim() || 'cher(e) ami(e)');
+  return out
     .replace(/{evangeliste}/g, S.evNom || 'votre évangéliste')
     .replace(/{date}/g, now.toLocaleDateString('fr-FR'))
     .replace(/{heure}/g, now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
+}
+
+// Même modèle que texteModeleMessage, mais générique (garde {prenom} en
+// placeholder) : sert de base pour un envoi à plusieurs personnes.
+function texteModeleMessageGroupe(cle) {
+  const modele = MODELES_MESSAGES_SUIVI[cle];
+  if (!modele) return '';
+  return remplacerVariablesMessage(modele.variantes[0], null, true);
 }
 
 // Choisit une variante stable pour une même personne (mais qui varie d'une personne à l'autre)
@@ -7533,88 +7580,15 @@ function _ficheMsgSuivi(ficheId) {
   return (S.myFiches || []).find(f => f.id === ficheId) || (S.fiches || []).find(f => f.id === ficheId);
 }
 
-// Ouvre le modal de message suggéré pour une fiche donnée
-function ouvrirModalMessageSuivi(ficheId) {
+// Point d'entrée depuis le bouton "✉️ Message suggéré" d'une fiche seule :
+// pré-sélectionne cette fiche et ouvre le même modal que pour un envoi à
+// plusieurs personnes (un seul système pour 1 ou plusieurs destinataires).
+function ouvrirMessagePourFiche(ficheId) {
   const fiche = _ficheMsgSuivi(ficheId);
   if (!fiche) return toast('⚠️ Fiche introuvable');
-  const telRaw = (fiche.telephone || '').replace(/\s/g, '');
-  const telIntl = telRaw.startsWith('0') ? '+212' + telRaw.slice(1) : telRaw;
-  if (!telRaw) return toast('⚠️ Aucun numéro WhatsApp enregistré pour cette personne');
-
-  const cleSuggeree = suggererModeleMessage(fiche);
-  S._msgSuiviFicheId = ficheId;
-  S._msgSuiviTel = telIntl;
-
-  const select = document.getElementById('msuivi-select');
-  select.innerHTML = Object.keys(MODELES_MESSAGES_SUIVI).map(cle =>
-    `<option value="${cle}" ${cle === cleSuggeree ? 'selected' : ''}>${MODELES_MESSAGES_SUIVI[cle].label}${cle === cleSuggeree ? ' — suggéré' : ''}</option>`
-  ).join('');
-
-  document.getElementById('msuivi-texte').value = texteModeleMessage(cleSuggeree, fiche);
-  document.getElementById('msuivi-nom').textContent = `${fiche.nom || ''} ${fiche.prenom || ''}`.trim();
-  document.getElementById('msuivi-etape-redaction').style.display = 'block';
-  document.getElementById('msuivi-etape-envoi').style.display = 'none';
-  document.getElementById('modal-msg-suivi').style.display = 'flex';
-}
-
-// Changement manuel de modèle : ne remplace le texte que si l'évangéliste
-// n'a pas commencé à le personnaliser (même logique que pour les comptes-rendus)
-function changerModeleMessageSuivi() {
-  const fiche = _ficheMsgSuivi(S._msgSuiviFicheId);
-  const cle = document.getElementById('msuivi-select').value;
-  document.getElementById('msuivi-texte').value = texteModeleMessage(cle, fiche);
-}
-
-function apercuMessageSuivi() {
-  const texte = document.getElementById('msuivi-texte').value.trim();
-  if (!texte) return toast('⚠️ Le message est vide');
-  document.getElementById('msuivi-apercu').textContent = texte;
-  document.getElementById('msuivi-lien-wa').href =
-    `https://wa.me/${(S._msgSuiviTel || '').replace('+', '')}?text=${encodeURIComponent(texte)}`;
-  document.getElementById('msuivi-etape-redaction').style.display = 'none';
-  document.getElementById('msuivi-etape-envoi').style.display = 'block';
-}
-
-function retourRedactionMessageSuivi() {
-  document.getElementById('msuivi-etape-redaction').style.display = 'block';
-  document.getElementById('msuivi-etape-envoi').style.display = 'none';
-}
-
-// Une fois le message réellement envoyé sur WhatsApp, l'évangéliste confirme
-// ici pour que ça reste tracé dans le suivi de la personne
-async function confirmerEnvoiMessageSuivi() {
-  const ficheId = S._msgSuiviFicheId;
-  const fiche = _ficheMsgSuivi(ficheId);
-  const texte = document.getElementById('msuivi-texte').value.trim();
-  const today = new Date().toISOString().split('T')[0];
-  const btn = document.getElementById('msuivi-btn-confirme');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Enregistrement…'; }
-  try {
-    await window._saveActivity({
-      ficheId,
-      ficheNom: `${fiche?.nom || ''} ${fiche?.prenom || ''}`.trim(),
-      type: 'message',
-      date: today,
-      note: texte,
-      parId: S.evId || 'admin',
-      parNom: S.evNom || 'Responsable',
-      evangelisteId: fiche?.evangelisteId || S.evId || null,
-    });
-    toast('✅ Message noté dans le suivi');
-    fermerModalMessageSuivi();
-    loadEvFicheHistory(ficheId);
-  } catch (err) {
-    console.error(err);
-    toast('❌ Erreur d\'enregistrement');
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '✅ C\'est envoyé'; }
-  }
-}
-
-function fermerModalMessageSuivi() {
-  document.getElementById('modal-msg-suivi').style.display = 'none';
-  S._msgSuiviFicheId = null;
-  S._msgSuiviTel = null;
+  if (!(fiche.telephone || '').trim()) return toast('⚠️ Aucun numéro WhatsApp enregistré pour cette personne');
+  _fichesSelectionnees = new Set([ficheId]);
+  ouvrirMessageGroupe();
 }
 
 function selectActType(ficheId, type, btn) {
@@ -12829,10 +12803,10 @@ if (_origInitDash) {
         </div>
 
         <div class="aide-section">
-          <div class="aide-titre">💬 Message groupé WhatsApp</div>
-          <p>Dans "Mes fiches", bouton <strong>"☑️ Message groupé WhatsApp"</strong> : des cases à cocher apparaissent sur chaque fiche. Cochez celles que vous voulez contacter, puis "Écrire le message".</p>
-          <p>Écrivez votre texte une seule fois. Le mot <code>{prenom}</code> est remplacé automatiquement par le prénom de chaque personne. WhatsApp s'ouvre ensuite pour le premier contact, message déjà prêt ; vous cliquez "Envoyé, suivant" et l'app passe au contact suivant, jusqu'à la fin de la liste.</p>
-          <p>WhatsApp ne permet pas d'envoi groupé automatique à plusieurs numéros en un clic, c'est une limite de la plateforme elle-même. Ce système reste le plus rapide possible dans ce cadre : le message n'est écrit qu'une fois.</p>
+          <div class="aide-titre">✉️ Message suggéré (1 ou plusieurs personnes)</div>
+          <p>Sur une fiche, bouton <strong>"✉️ Message suggéré"</strong> : un modèle de message adapté au suivi de cette personne s'affiche, modifiable avant l'envoi sur WhatsApp.</p>
+          <p>Pour contacter plusieurs personnes d'un coup, bouton <strong>"☑️ Message groupé WhatsApp"</strong> dans "Mes fiches" : des cases à cocher apparaissent, cochez les fiches voulues puis "Écrire le message". C'est le même système que pour une seule personne : un modèle suggéré est proposé, modifiable, et le mot <code>{prenom}</code> est remplacé automatiquement pour chacun.</p>
+          <p>Le texte n'est écrit qu'une seule fois. WhatsApp s'ouvre ensuite pour le premier contact, message déjà prêt ; vous cliquez "Envoyé, suivant" et l'app passe au contact suivant, jusqu'à la fin de la liste. WhatsApp ne permet pas d'envoi groupé automatique en un seul clic à plusieurs numéros, c'est une limite de la plateforme elle-même — ce système reste le plus rapide possible dans ce cadre.</p>
         </div>
 
         <div class="aide-section">
@@ -12936,51 +12910,21 @@ if (_origInitDash) {
   </div>
 </div>
 
-<!-- MODAL MESSAGE DE SUIVI SUGGÉRÉ (WhatsApp, par fiche) -->
-<div class="modal-overlay" id="modal-msg-suivi" style="display:none;z-index:9999;">
-  <div class="modal" style="max-width:520px;">
-    <div class="modal-head">
-      <div class="modal-title">✉️ Message pour <span id="msuivi-nom"></span></div>
-      <button class="modal-close" onclick="fermerModalMessageSuivi()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div id="msuivi-etape-redaction">
-        <div class="field"><label>Modèle proposé</label>
-          <select id="msuivi-select" onchange="changerModeleMessageSuivi()"></select>
-        </div>
-        <div style="font-size:11.5px;color:var(--mu);margin:2px 0 10px;">Le modèle affiché est celui suggéré automatiquement selon le suivi de cette personne. Vous pouvez en choisir un autre et tout modifier avant l'envoi.</div>
-        <div style="position:relative;">
-          <textarea id="msuivi-texte" rows="8" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 40px 9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:vertical;width:100%;color:var(--tx);"></textarea>
-          <button type="button" class="btn-mic" id="msuivi-mic" onclick="toggleDictee('msuivi-texte','msuivi-mic')" title="Dicter le message">🎤</button>
-        </div>
-        <button class="btn btn-primary btn-full" style="margin-top:14px;" onclick="apercuMessageSuivi()">👁️ Aperçu et envoi</button>
-      </div>
-      <div id="msuivi-etape-envoi" style="display:none;">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mu);margin-bottom:6px;">Aperçu du message</div>
-        <div style="background:var(--bg2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--tx);white-space:pre-wrap;margin-bottom:16px;max-height:220px;overflow-y:auto;" id="msuivi-apercu"></div>
-        <a id="msuivi-lien-wa" href="#" target="_blank" rel="noopener" class="btn btn-primary btn-full" style="margin-bottom:10px;display:block;text-align:center;text-decoration:none;">💬 Ouvrir WhatsApp pour envoyer</a>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-outline" style="flex:1;" onclick="retourRedactionMessageSuivi()">◀ Modifier</button>
-          <button class="btn btn-primary" id="msuivi-btn-confirme" style="flex:1;" onclick="confirmerEnvoiMessageSuivi()">✅ C'est envoyé</button>
-        </div>
-        <div style="font-size:10.5px;color:var(--mu);margin-top:8px;text-align:center;">Cliquez sur « C'est envoyé » une fois le message réellement envoyé sur WhatsApp, pour qu'il reste dans le suivi de cette personne.</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL MESSAGE GROUPÉ WHATSAPP (global) -->
+<!-- MODAL MESSAGE SUGGÉRÉ WHATSAPP (unifié : 1 ou plusieurs personnes) -->
 <div class="modal-overlay" id="modal-msg-groupe" style="display:none;z-index:9999;">
   <div class="modal" style="max-width:520px;">
     <div class="modal-head">
-      <div class="modal-title">💬 Message groupé WhatsApp</div>
+      <div class="modal-title" id="msg-groupe-titre">✉️ Message suggéré</div>
       <button class="modal-close" onclick="fermerMessageGroupe()">✕</button>
     </div>
     <div class="modal-body">
       <div id="msg-groupe-etape-redaction">
-        <div style="font-size:12.5px;color:var(--mu);margin-bottom:10px;">Écrivez le message une seule fois. Utilisez <code>{prenom}</code> pour qu'il soit personnalisé automatiquement pour chaque contact.</div>
+        <div class="field"><label>Modèle proposé</label>
+          <select id="msg-groupe-select" onchange="changerModeleMessageGroupe()"></select>
+        </div>
+        <div style="font-size:11.5px;color:var(--mu);margin:2px 0 10px;">Modèle suggéré automatiquement selon le suivi. Vous pouvez en choisir un autre et tout modifier. <code>{prenom}</code> est remplacé automatiquement pour chaque personne.</div>
         <div style="position:relative;">
-          <textarea id="msg-groupe-texte" rows="6" placeholder="Bonjour {prenom}, ..." style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 40px 9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:vertical;width:100%;color:var(--tx);"></textarea>
+          <textarea id="msg-groupe-texte" rows="7" placeholder="Bonjour {prenom}, ..." style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 40px 9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:vertical;width:100%;color:var(--tx);"></textarea>
           <button type="button" class="btn-mic" id="msg-groupe-mic" onclick="toggleDictee('msg-groupe-texte','msg-groupe-mic')" title="Dicter le message">🎤</button>
         </div>
         <button class="btn btn-primary btn-full" style="margin-top:14px;" onclick="demarrerEnvoiGroupe()">▶️ Démarrer l'envoi (<span id="msg-groupe-nb-select">0</span> contact(s))</button>
