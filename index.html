@@ -5875,6 +5875,7 @@ function renderEvFicheCard(f) {
     ? '<div style="display:flex;gap:7px;margin-top:7px;" onclick="event.stopPropagation()">'
       + '<a href="tel:' + telIntl + '" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:rgba(26,107,51,0.1);border:1.5px solid rgba(26,107,51,0.25);border-radius:20px;font-size:12px;font-weight:700;color:#1A6B33;text-decoration:none;white-space:nowrap;" onclick="event.stopPropagation()">📞 Appeler</a>'
       + '<a href="https://wa.me/' + telIntl.replace('+','') + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:rgba(37,211,102,0.1);border:1.5px solid rgba(37,211,102,0.35);border-radius:20px;font-size:12px;font-weight:700;color:#128C7E;text-decoration:none;white-space:nowrap;" onclick="event.stopPropagation()">💬 WhatsApp</a>'
+      + '<button type="button" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:rgba(123,17,17,0.06);border:1.5px solid rgba(123,17,17,0.25);border-radius:20px;font-size:12px;font-weight:700;color:var(--c1);white-space:nowrap;cursor:pointer;" onclick="event.stopPropagation();ouvrirModalMessageSuivi(\'' + f.id + '\')">✉️ Message suggéré</button>'
       + '</div>'
     : '';
 
@@ -7404,6 +7405,216 @@ function crModeleParDefaut(type, prenom) {
     message: `J'ai envoyé un message à ${nom} pour prendre de ses nouvelles.`
   };
   return modeles[type] || '';
+}
+
+/* ── MESSAGES WHATSAPP SUGGÉRÉS SELON L'ÉTAPE DE SUIVI ──────
+   L'app propose automatiquement, pour chaque personne suivie,
+   le message le plus adapté à sa situation — tout en laissant
+   l'évangéliste libre de changer de modèle et de tout modifier
+   avant l'envoi. Deux variantes par modèle pour éviter que les
+   messages se ressemblent trop d'une personne à l'autre. ── */
+const MODELES_MESSAGES_SUIVI = {
+  premier_contact: {
+    label: '👋 Premier contact',
+    variantes: [
+`Bonjour {prenom},
+J'espère que vous allez bien.
+Je suis {evangeliste}, de la commission Témoignage de l'EEAM Fès.
+Je voulais simplement me présenter et prendre de vos nouvelles. Nous sommes heureux de pouvoir vous compter parmi nous et nous restons à votre disposition si vous avez besoin d'échanger, de poser une question ou simplement de discuter.
+N'hésitez pas à nous écrire quand vous le souhaitez.
+Au plaisir d'avoir de vos nouvelles.
+Que Dieu vous bénisse.`,
+`Bonjour {prenom},
+J'espère que vous allez bien.
+Je m'appelle {evangeliste}, je fais partie de la commission Témoignage de l'EEAM Fès.
+Je tenais simplement à me présenter et à prendre contact avec vous. N'hésitez pas à nous écrire si vous avez une question, besoin d'échanger, ou tout simplement pour discuter, nous serons heureux de vous répondre.
+Au plaisir de vous lire.
+Que Dieu vous bénisse.`
+    ]
+  },
+  prise_nouvelles: {
+    label: '🙂 Prise de nouvelles',
+    variantes: [
+`Bonjour {prenom},
+J'espère que vous allez bien.
+C'est {evangeliste} de la commission Témoignage de l'EEAM Fès.
+Je voulais simplement prendre de vos nouvelles et savoir comment vous allez. J'espère que tout se passe bien pour vous.
+Au plaisir d'avoir de vos nouvelles.
+Que Dieu vous bénisse.`,
+`Bonjour {prenom},
+J'espère que vous allez bien de votre côté.
+C'est {evangeliste}, je passe simplement prendre de vos nouvelles.
+N'hésitez pas à me dire comment vous allez, ça me ferait plaisir d'avoir de vos nouvelles.
+Que Dieu vous bénisse.`
+    ]
+  },
+  demande_dispo: {
+    label: '📅 Demande de disponibilité',
+    variantes: [
+`Bonjour {prenom},
+J'espère que vous allez bien.
+Nous aimerions passer vous rendre visite afin de partager un moment avec vous. Seriez-vous disponible dans les prochains jours ?
+Faites-nous savoir le moment qui vous conviendrait le mieux.
+Que Dieu vous bénisse.`,
+`Bonjour {prenom},
+J'espère que vous allez bien.
+Ça nous ferait plaisir de venir vous rendre visite prochainement, pour partager un moment ensemble.
+Dites-moi simplement quand vous seriez disponible, on s'organise selon ce qui vous arrange le mieux.
+Que Dieu vous bénisse.`
+    ]
+  },
+  apres_visite: {
+    label: '🙏 Message après visite',
+    variantes: [
+`Bonjour {prenom},
+Merci encore pour votre accueil. Nous avons été heureux de partager ce moment avec vous.
+Nous espérons que cette visite vous a fait du bien et nous restons à votre disposition si vous avez besoin d'échanger.
+Que le Seigneur vous accompagne et vous bénisse abondamment.`,
+`Bonjour {prenom},
+Merci beaucoup pour votre accueil, ce moment passé ensemble nous a fait plaisir.
+N'hésitez pas à nous recontacter si vous avez besoin de quoi que ce soit, ou simplement envie d'échanger.
+Que le Seigneur vous bénisse et vous accompagne.`
+    ]
+  }
+};
+
+function _hashSimple(str) {
+  let h = 0;
+  for (let i = 0; i < (str||'').length; i++) { h = (h * 31 + str.charCodeAt(i)) | 0; }
+  return Math.abs(h);
+}
+
+// Remplace {prenom}, {evangeliste}, {date}, {heure} par les valeurs réelles
+function remplacerVariablesMessage(texte, f) {
+  const now = new Date();
+  return (texte || '')
+    .replace(/{prenom}/g, (f?.prenom || '').trim() || 'cher(e) ami(e)')
+    .replace(/{evangeliste}/g, S.evNom || 'votre évangéliste')
+    .replace(/{date}/g, now.toLocaleDateString('fr-FR'))
+    .replace(/{heure}/g, now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
+}
+
+// Choisit une variante stable pour une même personne (mais qui varie d'une personne à l'autre)
+function texteModeleMessage(cle, f) {
+  const modele = MODELES_MESSAGES_SUIVI[cle];
+  if (!modele) return '';
+  const idx = _hashSimple(f?.id) % modele.variantes.length;
+  return remplacerVariablesMessage(modele.variantes[idx], f);
+}
+
+/* Analyse l'historique de suivi d'une fiche et propose le modèle
+   le plus adapté :
+   - visite réalisée sans message envoyé depuis  → message après visite
+   - aucun message jamais envoyé                 → premier contact
+   - dernier message envoyé il y a ≥ 1 mois       → demande de disponibilité
+   - dernier message envoyé il y a ≥ 2 semaines   → prise de nouvelles
+   - sinon (contact encore récent)                → prise de nouvelles (repli) */
+function suggererModeleMessage(f) {
+  const acts = (S.activities || []).filter(a => a.ficheId === f.id);
+  const messages = acts.filter(a => a.type === 'message')
+    .sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+  const visites = acts.filter(a => a.type === 'visite')
+    .sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+
+  const dernierMessage = messages.length ? messages[messages.length - 1] : null;
+  const derniereVisite = visites.length ? visites[visites.length - 1] : null;
+
+  if (derniereVisite && (!dernierMessage || new Date(dernierMessage.date || 0) < new Date(derniereVisite.date || 0))) {
+    return 'apres_visite';
+  }
+  if (!dernierMessage) return 'premier_contact';
+
+  const jours = Math.floor((new Date() - new Date(dernierMessage.date)) / 86400000);
+  if (jours >= 30) return 'demande_dispo';
+  return 'prise_nouvelles';
+}
+
+function _ficheMsgSuivi(ficheId) {
+  return (S.myFiches || []).find(f => f.id === ficheId) || (S.fiches || []).find(f => f.id === ficheId);
+}
+
+// Ouvre le modal de message suggéré pour une fiche donnée
+function ouvrirModalMessageSuivi(ficheId) {
+  const fiche = _ficheMsgSuivi(ficheId);
+  if (!fiche) return toast('⚠️ Fiche introuvable');
+  const telRaw = (fiche.telephone || '').replace(/\s/g, '');
+  const telIntl = telRaw.startsWith('0') ? '+212' + telRaw.slice(1) : telRaw;
+  if (!telRaw) return toast('⚠️ Aucun numéro WhatsApp enregistré pour cette personne');
+
+  const cleSuggeree = suggererModeleMessage(fiche);
+  S._msgSuiviFicheId = ficheId;
+  S._msgSuiviTel = telIntl;
+
+  const select = document.getElementById('msuivi-select');
+  select.innerHTML = Object.keys(MODELES_MESSAGES_SUIVI).map(cle =>
+    `<option value="${cle}" ${cle === cleSuggeree ? 'selected' : ''}>${MODELES_MESSAGES_SUIVI[cle].label}${cle === cleSuggeree ? ' — suggéré' : ''}</option>`
+  ).join('');
+
+  document.getElementById('msuivi-texte').value = texteModeleMessage(cleSuggeree, fiche);
+  document.getElementById('msuivi-nom').textContent = `${fiche.nom || ''} ${fiche.prenom || ''}`.trim();
+  document.getElementById('msuivi-etape-redaction').style.display = 'block';
+  document.getElementById('msuivi-etape-envoi').style.display = 'none';
+  document.getElementById('modal-msg-suivi').style.display = 'flex';
+}
+
+// Changement manuel de modèle : ne remplace le texte que si l'évangéliste
+// n'a pas commencé à le personnaliser (même logique que pour les comptes-rendus)
+function changerModeleMessageSuivi() {
+  const fiche = _ficheMsgSuivi(S._msgSuiviFicheId);
+  const cle = document.getElementById('msuivi-select').value;
+  document.getElementById('msuivi-texte').value = texteModeleMessage(cle, fiche);
+}
+
+function apercuMessageSuivi() {
+  const texte = document.getElementById('msuivi-texte').value.trim();
+  if (!texte) return toast('⚠️ Le message est vide');
+  document.getElementById('msuivi-apercu').textContent = texte;
+  document.getElementById('msuivi-lien-wa').href =
+    `https://wa.me/${(S._msgSuiviTel || '').replace('+', '')}?text=${encodeURIComponent(texte)}`;
+  document.getElementById('msuivi-etape-redaction').style.display = 'none';
+  document.getElementById('msuivi-etape-envoi').style.display = 'block';
+}
+
+function retourRedactionMessageSuivi() {
+  document.getElementById('msuivi-etape-redaction').style.display = 'block';
+  document.getElementById('msuivi-etape-envoi').style.display = 'none';
+}
+
+// Une fois le message réellement envoyé sur WhatsApp, l'évangéliste confirme
+// ici pour que ça reste tracé dans le suivi de la personne
+async function confirmerEnvoiMessageSuivi() {
+  const ficheId = S._msgSuiviFicheId;
+  const fiche = _ficheMsgSuivi(ficheId);
+  const texte = document.getElementById('msuivi-texte').value.trim();
+  const today = new Date().toISOString().split('T')[0];
+  const btn = document.getElementById('msuivi-btn-confirme');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Enregistrement…'; }
+  try {
+    await window._saveActivity({
+      ficheId,
+      ficheNom: `${fiche?.nom || ''} ${fiche?.prenom || ''}`.trim(),
+      type: 'message',
+      date: today,
+      note: texte,
+      parId: S.evId || 'admin',
+      parNom: S.evNom || 'Responsable',
+      evangelisteId: fiche?.evangelisteId || S.evId || null,
+    });
+    toast('✅ Message noté dans le suivi');
+    fermerModalMessageSuivi();
+    loadEvFicheHistory(ficheId);
+  } catch (err) {
+    console.error(err);
+    toast('❌ Erreur d\'enregistrement');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '✅ C\'est envoyé'; }
+  }
+}
+
+function fermerModalMessageSuivi() {
+  document.getElementById('modal-msg-suivi').style.display = 'none';
+  S._msgSuiviFicheId = null;
+  S._msgSuiviTel = null;
 }
 
 function selectActType(ficheId, type, btn) {
@@ -12721,6 +12932,39 @@ if (_origInitDash) {
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MESSAGE DE SUIVI SUGGÉRÉ (WhatsApp, par fiche) -->
+<div class="modal-overlay" id="modal-msg-suivi" style="display:none;z-index:9999;">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-head">
+      <div class="modal-title">✉️ Message pour <span id="msuivi-nom"></span></div>
+      <button class="modal-close" onclick="fermerModalMessageSuivi()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="msuivi-etape-redaction">
+        <div class="field"><label>Modèle proposé</label>
+          <select id="msuivi-select" onchange="changerModeleMessageSuivi()"></select>
+        </div>
+        <div style="font-size:11.5px;color:var(--mu);margin:2px 0 10px;">Le modèle affiché est celui suggéré automatiquement selon le suivi de cette personne. Vous pouvez en choisir un autre et tout modifier avant l'envoi.</div>
+        <div style="position:relative;">
+          <textarea id="msuivi-texte" rows="8" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 40px 9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:vertical;width:100%;color:var(--tx);"></textarea>
+          <button type="button" class="btn-mic" id="msuivi-mic" onclick="toggleDictee('msuivi-texte','msuivi-mic')" title="Dicter le message">🎤</button>
+        </div>
+        <button class="btn btn-primary btn-full" style="margin-top:14px;" onclick="apercuMessageSuivi()">👁️ Aperçu et envoi</button>
+      </div>
+      <div id="msuivi-etape-envoi" style="display:none;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mu);margin-bottom:6px;">Aperçu du message</div>
+        <div style="background:var(--bg2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--tx);white-space:pre-wrap;margin-bottom:16px;max-height:220px;overflow-y:auto;" id="msuivi-apercu"></div>
+        <a id="msuivi-lien-wa" href="#" target="_blank" rel="noopener" class="btn btn-primary btn-full" style="margin-bottom:10px;display:block;text-align:center;text-decoration:none;">💬 Ouvrir WhatsApp pour envoyer</a>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline" style="flex:1;" onclick="retourRedactionMessageSuivi()">◀ Modifier</button>
+          <button class="btn btn-primary" id="msuivi-btn-confirme" style="flex:1;" onclick="confirmerEnvoiMessageSuivi()">✅ C'est envoyé</button>
+        </div>
+        <div style="font-size:10.5px;color:var(--mu);margin-top:8px;text-align:center;">Cliquez sur « C'est envoyé » une fois le message réellement envoyé sur WhatsApp, pour qu'il reste dans le suivi de cette personne.</div>
+      </div>
     </div>
   </div>
 </div>
