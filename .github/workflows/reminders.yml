@@ -12,39 +12,39 @@
 #     l'app fermée pendant des mois — tant qu'il a autorisé les
 #     notifications une fois sur son appareil, il les reçoit.
 #
-# Coût : 0€. GitHub Actions offre largement assez de minutes gratuites
-# pour une exécution horaire de ce script (quelques secondes par run).
+# ── FRÉQUENCE : toutes les 15 minutes (au lieu de toutes les heures) ──
+# Avant, "0 * * * *" ne se déclenchait qu'à l'heure pile : une notif
+# demandée à 14h05 pouvait attendre jusqu'à 14h59 avant de partir.
+# Avec "*/15 * * * *", l'attente maximale tombe à 15 minutes (au lieu
+# de 59). GitHub ne garantit jamais l'exécution à la seconde près (un
+# run planifié peut être retardé de quelques minutes en période de
+# forte charge sur leurs serveurs), mais ce réglage réduit fortement
+# le délai moyen. Coût : toujours 0€ pour ce volume.
 #
 # À placer tel quel dans .github/workflows/reminders.yml à la racine
 # du dépôt (créez le dossier .github/workflows/ s'il n'existe pas).
 # Si vous avez déjà un fichier de ce type, remplacez juste le bloc
-# "schedule" par celui-ci pour passer à une fréquence horaire.
-
+# "schedule" par celui-ci.
 name: Rappels automatiques — Commission Témoignage
-
 on:
   schedule:
-    # Toutes les heures. Les rappels hebdo/mensuels ont leur propre
+    # Toutes les 15 minutes. Les rappels hebdo/mensuels ont leur propre
     # logique de date à l'intérieur du script (ils ne se déclenchent
     # qu'aux bons jours) — tourner plus souvent ne crée jamais de
     # doublon, ça ne fait qu'accélérer la détection et la livraison
     # des notifications push en attente.
-    - cron: '0 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch: {} # bouton "Run workflow" manuel dans l'onglet Actions, pratique pour tester
-
 jobs:
   rappels:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-
       - name: Installer les dépendances
         run: npm install firebase-admin web-push
-
       - name: Exécuter le script de rappels
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
