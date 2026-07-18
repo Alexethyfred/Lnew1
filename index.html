@@ -4159,6 +4159,63 @@ function getEquipeForQuartier(quartier) {
   return null;
 }
 
+/* ── DÉTECTION DE CONFLIT ENTRE MOTS-CLÉS DE ZONES ─────────────
+   Réutilise la même logique de correspondance que getEquipeForQuartier
+   (inclusion dans les deux sens, mots de plus de 2 caractères) pour
+   repérer, AVANT sauvegarde, qu'un mot-clé chevauche déjà une autre zone.
+   Retourne { motCle, zoneNom } du premier conflit trouvé, ou null.
+   excludeZoneNom : nom de la zone en cours d'édition, à ignorer dans la comparaison.
+────────────────────────────────────────────────────────── */
+function findKeywordConflict(keywordsStr, excludeZoneNom) {
+  const kws = (keywordsStr || '').split(',').map(k => normalizeStr(k.trim())).filter(k => k.length > 2);
+  if (!kws.length) return null;
+  for (const z of (S.zones || [])) {
+    if (z.nom === excludeZoneNom) continue;
+    if (!z.keywords) continue;
+    const otherKws = z.keywords.split(',').map(k => normalizeStr(k.trim())).filter(Boolean);
+    for (const k of kws) {
+      const hit = otherKws.find(ok => ok.length > 2 && (ok.includes(k) || k.includes(ok)));
+      if (hit) return { motCle: k, zoneNom: z.nom };
+    }
+  }
+  return null;
+}
+
+/* ── STATUT DE CADENCE (vue Zone) ──────────────────────────────
+   Remplace le drapeau binaire "visité" par une vraie photo du
+   suivi terrain, calculée à l'affichage à partir des données
+   déjà existantes (evangelisteId, observations, nextActionDate).
+   Rien n'est stocké : purement calculé, toujours à jour.
+   Ordre de priorité : retard > non_confie > attente_1ere > actif > relancer
+────────────────────────────────────────────────────────── */
+const SEUIL_RELANCE_JOURS = 30;
+
+function getCadenceStatus(f) {
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // 1) En retard : priorité absolue, quelle que soit la situation par ailleurs
+  if (f.nextActionDate && f.nextActionDate < todayStr) {
+    return { key: 'retard', label: 'En retard', icon: '⚠️', color: '#C0392B' };
+  }
+  // 2) Non confié : pas d'évangéliste
+  if (!f.evangelisteId) {
+    return { key: 'non_confie', label: 'Non confié', icon: '🆕', color: '#C0392B' };
+  }
+  const obs = f.observations || [];
+  // 3) 1ère visite en attente : confiée, jamais visitée
+  if (!obs.length) {
+    return { key: 'attente_1ere', label: '1ère visite en attente', icon: '📋', color: '#B86A00' };
+  }
+  // 4/5) Suivi actif vs à relancer, selon fraîcheur du dernier contact
+  const lastObs = obs.slice().sort((a, b) => new Date(b.dateVisite || b.date || 0) - new Date(a.dateVisite || a.date || 0))[0];
+  const lastDate = new Date(lastObs.dateVisite || lastObs.date || 0);
+  const daysSince = (new Date(todayStr + 'T12:00:00') - lastDate) / 86400000;
+  if (daysSince > SEUIL_RELANCE_JOURS) {
+    return { key: 'relancer', label: 'À relancer', icon: '⏳', color: '#B86A00' };
+  }
+  return { key: 'actif', label: 'Suivi actif', icon: '🔄', color: '#1A7A3A' };
+}
+
 function buildEvOptions(fiche) {
   const actifs = S.evs.filter(e => e.actif);
   const quartierZone = getEquipeForQuartier(fiche?.quartier);
@@ -4880,6 +4937,15 @@ let _zonesFirebaseLoaded = false;
 
 const DEFAULT_ZONES = ['Euromed','Sebaa Rouadi','Chaima','Bensouda','Lido','Atlas','Mont Fleuri','Narjiss'];
 
+function toggleFichesSansEvGlobal() {
+  const body = document.getElementById('fiches-sans-ev-body');
+  const arrow = document.getElementById('fiches-sans-ev-arrow');
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
+}
+
 function toggleZonesManager() {
   const body = document.getElementById('zones-manager-body');
   const btn  = document.getElementById('zones-manager-toggle');
@@ -4897,7 +4963,15 @@ async function addZone() {
   const icon = (iconEl?.value || '').trim() || '📍';
   const keywords = (quartiersEl?.value || '').trim();
   if (!nom) return toast('⚠️ Saisissez le nom de la zone');
-  if ((S.zones||[]).find(z => z.nom.toLowerCase() === nom.toLowerCase())) return toast('⚠️ Cette zone existe déjà');
+  if ((S.zones||[]).find(z => normalizeStr(z.nom) === normalizeStr(nom))) return toast('⚠️ Cette zone existe déjà');
+
+  if (keywords) {
+    const conflit = findKeywordConflict(keywords, null);
+    if (conflit) {
+      const ok = confirm(`⚠️ "${conflit.motCle}" est déjà couvert par la zone "${conflit.zoneNom}".\nContinuer quand même peut créer une attribution ambiguë (le résultat dépendra de l'ordre des zones).\n\nContinuer ?`);
+      if (!ok) return;
+    }
+  }
 
   // Mise à jour locale immédiate (optimiste)
   const tempZone = { nom, icon, keywords, _temp: true };
@@ -4922,6 +4996,67 @@ async function addZone() {
       toast('❌ Permission refusée — vérifiez les règles Firestore pour la collection "zones"');
     } else {
       toast('❌ Erreur ajout zone : ' + (e.message||e.code||'inconnue'));
+    }
+  }
+}
+
+async function renameZone(ancienNom, id, idx) {
+  const nomEl  = document.getElementById('zn-nom-' + idx);
+  const iconEl = document.getElementById('zn-icon-' + idx);
+  if (!nomEl) return;
+  const nouveauNom = nomEl.value.trim();
+  const icon = (iconEl?.value || '').trim() || '📍';
+  if (!nouveauNom) return toast('⚠️ Le nom de la zone ne peut pas être vide');
+
+  const renommee = nouveauNom !== ancienNom;
+  if (renommee && (S.zones||[]).some(z => z.nom !== ancienNom && normalizeStr(z.nom) === normalizeStr(nouveauNom))) {
+    return toast('⚠️ Une zone porte déjà ce nom');
+  }
+  if (!id) return toast('❌ Zone introuvable côté serveur, réessayez après rechargement');
+
+  // Mise à jour locale immédiate (optimiste)
+  const prevZones = [...(S.zones||[])];
+  S.zones = S.zones.map(z => z.id === id ? { ...z, nom: nouveauNom, icon } : z);
+  const prevEvs = S.evs ? [...S.evs] : [];
+  if (renommee) {
+    S.evs = (S.evs||[]).map(e => ({
+      ...e,
+      equipe: e.equipe === ancienNom ? nouveauNom : e.equipe,
+      zonesSecondaires: (e.zonesSecondaires||[]).map(z => z === ancienNom ? nouveauNom : z)
+    }));
+  }
+  _applyZoneUI();
+  if (typeof renderEquipes === 'function') renderEquipes();
+
+  try {
+    await db.collection('zones').doc(id).update({ nom: nouveauNom, icon, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+
+    if (renommee) {
+      // Migrer les évangélistes qui pointaient vers l'ancien nom, pour ne pas les
+      // laisser orphelins silencieusement après un renommage.
+      const snap = await db.collection('evangelistes').where('equipe', '==', ancienNom).get();
+      const batch = db.batch();
+      snap.docs.forEach(d => batch.update(d.ref, { equipe: nouveauNom }));
+      if (!snap.empty) await batch.commit();
+
+      const snapSec = await db.collection('evangelistes').where('zonesSecondaires', 'array-contains', ancienNom).get();
+      for (const d of snapSec.docs) {
+        const zs = (d.data().zonesSecondaires || []).map(z => z === ancienNom ? nouveauNom : z);
+        await d.ref.update({ zonesSecondaires: zs });
+      }
+    }
+    toast('✅ Zone renommée en "' + nouveauNom + '"');
+  } catch(e) {
+    console.error('renameZone error:', e);
+    // Rollback
+    S.zones = prevZones;
+    S.evs = prevEvs;
+    _applyZoneUI();
+    if (typeof renderEquipes === 'function') renderEquipes();
+    if (e.code === 'permission-denied') {
+      toast('❌ Permission refusée — vérifiez les règles Firestore pour "zones"/"evangelistes"');
+    } else {
+      toast('❌ Erreur renommage : ' + (e.message||e.code||'inconnue'));
     }
   }
 }
@@ -5060,11 +5195,19 @@ function renderZoneChips() {
     const kwDisplay = z.keywords ? z.keywords.split(',').map(k=>k.trim()).filter(Boolean).join(', ') : '';
     return `
     <div style="background:${z._temp?'rgba(184,106,0,0.08)':'var(--bg2)'};border:1.5px solid ${z._temp?'rgba(184,106,0,0.3)':'var(--bo)'};border-radius:12px;padding:10px 12px;margin-bottom:8px;opacity:${z._temp?'0.7':'1'};">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
-        <span style="font-size:13px;font-weight:700;color:var(--tx);">${esc(z.icon||'📍')} ${esc(z.nom)}${z._temp?' ⏳':''}</span>
-        ${!z._temp ? `<button onclick="deleteZone('${escQ(z.nom)}')" style="background:none;border:none;color:var(--c3);cursor:pointer;font-size:13px;padding:0 4px;" title="Supprimer la zone">✕</button>` : ''}
+      ${z._temp ? `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <span style="font-size:13px;font-weight:700;color:var(--tx);">${esc(z.icon||'📍')} ${esc(z.nom)} ⏳</span>
+      </div>` : `
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+        <input type="text" id="zn-icon-${i}" value="${esc(z.icon||'📍')}"
+          style="width:40px;background:var(--surface);border:1px solid var(--bo);border-radius:7px;padding:6px 4px;font-size:15px;text-align:center;outline:none;">
+        <input type="text" id="zn-nom-${i}" value="${esc(z.nom)}"
+          style="flex:1;background:var(--surface);border:1px solid var(--bo);border-radius:7px;padding:6px 9px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;outline:none;color:var(--tx);">
+        <button onclick="renameZone('${escQ(z.nom)}','${escQ(z.id||'')}',${i})"
+          style="padding:5px 9px;border-radius:7px;border:1px solid var(--bo);background:var(--surface);color:var(--tx);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;" title="Enregistrer le nom / l'icône">✏️ Renommer</button>
+        <button onclick="deleteZone('${escQ(z.nom)}')" style="background:none;border:none;color:var(--c3);cursor:pointer;font-size:15px;padding:0 4px;" title="Supprimer la zone">✕</button>
       </div>
-      ${!z._temp ? `
       <div style="display:flex;gap:6px;align-items:center;">
         <input type="text" id="kw-${i}" placeholder="Quartiers couverts (ex: Uvillage, Sebaa Rouadi…)"
           value="${esc(kwDisplay)}"
@@ -5074,15 +5217,50 @@ function renderZoneChips() {
           style="padding:5px 10px;border-radius:7px;border:1px solid var(--bo);background:var(--c1);color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">💾 Sauv.</button>
       </div>
       <div style="font-size:10px;color:var(--mu);margin-top:3px;">Séparez les quartiers par des virgules (la correspondance ignore majuscules et accents).</div>
-      ` : ''}
+      `}
     </div>`;
   }).join('');
+
+  renderQuartiersNonReconnus();
+}
+
+/* ── Compteur "quartiers non reconnus" dans le panneau de gestion des zones ──
+   Liste les quartiers distincts trouvés dans les fiches qui ne correspondent
+   à aucune zone actuelle — pour que l'admin sache où compléter les mots-clés. */
+function renderQuartiersNonReconnus() {
+  const el = document.getElementById('quartiers-non-reconnus');
+  if (!el) return;
+  const fiches = (typeof getFiches === 'function') ? getFiches() : (S.fiches || []);
+  const inconnus = [...new Set(
+    fiches.map(f => (f.quartier||'').trim()).filter(Boolean).filter(q => !getEquipeForQuartier(q))
+  )].sort((a,b) => a.localeCompare(b, 'fr', {sensitivity:'base'}));
+
+  if (!inconnus.length) {
+    el.innerHTML = `<div style="font-size:11px;color:var(--mu);">✅ Tous les quartiers renseignés sont reconnus par une zone.</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.querySelector('span').textContent=this.nextElementSibling.style.display==='none'?'▶':'▼';" style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#B86A00;">
+      ⚠️ ${inconnus.length} quartier${inconnus.length!==1?'s':''} non reconnu${inconnus.length!==1?'s':''} <span style="margin-left:4px;">▶</span>
+    </div>
+    <div style="display:none;margin-top:6px;font-size:11px;color:var(--mu);line-height:1.6;">
+      ${inconnus.map(q => `<span style="display:inline-block;background:var(--surface);border:1px solid var(--bo);border-radius:20px;padding:2px 9px;margin:0 4px 4px 0;">${q}</span>`).join('')}
+    </div>`;
 }
 
 async function saveZoneQuartiers(nom, id, idx) {
   const inp = document.getElementById('kw-' + idx);
   if (!inp) return;
   const keywords = inp.value.trim();
+
+  if (keywords) {
+    const conflit = findKeywordConflict(keywords, nom);
+    if (conflit) {
+      const ok = confirm(`⚠️ "${conflit.motCle}" est déjà couvert par la zone "${conflit.zoneNom}".\nContinuer quand même peut créer une attribution ambiguë (le résultat dépendra de l'ordre des zones).\n\nContinuer ?`);
+      if (!ok) return;
+    }
+  }
+
   // Mise à jour locale immédiate
   S.zones = S.zones.map(z => z.nom === nom ? { ...z, keywords } : z);
   // Recalculer les groupements
@@ -7049,6 +7227,7 @@ function renderEquipes() {
     </div>
     <div id="zones-manager-body" style="display:none;padding:14px;">
       <div style="font-size:12px;color:var(--mu);margin-bottom:10px;">Zones actuelles : définissez les quartiers couverts par chaque zone. Un évangéliste est assigné à une zone dans son profil.</div>
+      <div id="quartiers-non-reconnus" style="margin-bottom:12px;"></div>
       <div id="zones-list-manage" style="margin-bottom:12px;"></div>
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mu);margin-bottom:6px;">Nouvelle zone</div>
       <div style="display:flex;gap:8px;margin-bottom:6px;">
@@ -7063,68 +7242,85 @@ function renderEquipes() {
 
   const today = new Date().toISOString().split('T')[0];
 
-  // Helper: mini progress bar dots (5 dots)
-  function dotBar(nb, vis, enc) {
-    const total = Math.max(nb, 1);
-    const dots = 5;
-    let html = '';
-    for (let i = 0; i < dots; i++) {
-      const ratio = i / dots;
-      let clr;
-      if (ratio < vis / total) clr = '#1A7A3A';
-      else if (ratio < enc / total) clr = '#E8A000';
-      else clr = 'rgba(0,0,0,0.12)';
-      html += `<span style="display:inline-block;width:18px;height:4px;border-radius:2px;background:${clr};margin-right:2px;"></span>`;
-    }
-    return html;
-  }
-
-  // Helper: fiche kanban card
+  // Helper: fiche kanban card — le statut affiché est désormais la cadence
+  // de suivi réelle (getCadenceStatus), pas le drapeau binaire "visité".
   function ficheKanbanCard(f) {
     const ev = evActifs.find(e => e.id === f.evangelisteId);
     const evInitials = ev ? (ev.nom||'').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase() : null;
-    const isRetard = f.nextActionDate && f.nextActionDate < today;
-    let statusLine = '';
-    if (f.statut === 'visite') {
-      const d = f.visitDate || f.nextActionDate || '';
-      const dFmt = d ? d.split('-').reverse().slice(0,2).join('/') : '';
-      statusLine = `<div style="font-size:10px;color:#1A7A3A;font-weight:600;margin-top:3px;">✓ Visité${dFmt?' '+dFmt:''}</div>`;
-    } else if (isRetard) {
+    const cad = getCadenceStatus(f);
+    let statusLine = `<div style="font-size:10px;color:${cad.color};font-weight:600;margin-top:3px;">${cad.icon} ${cad.label}</div>`;
+    if (cad.key === 'retard' && f.nextActionDate) {
       const days = Math.floor((new Date(today + 'T12:00:00') - new Date(f.nextActionDate + 'T12:00:00')) / 86400000);
-      statusLine = `<div style="font-size:10px;color:#C0392B;font-weight:600;margin-top:3px;">⚠ Retard ${days}j</div>`;
-    } else if (f.nextAction) {
+      statusLine = `<div style="font-size:10px;color:${cad.color};font-weight:600;margin-top:3px;">${cad.icon} ${cad.label} (${days}j)</div>`;
+    } else if (f.nextAction && (cad.key === 'actif' || cad.key === 'attente_1ere')) {
       const typeIcon = f.nextAction === 'appel' ? '📞' : f.nextAction === 'visite' ? '🚶' : f.nextAction === 'message' ? '💬' : '📌';
       const d = f.nextActionDate ? f.nextActionDate.split('-').reverse().slice(0,2).join('/') : '';
-      statusLine = `<div style="font-size:10px;color:var(--mu);margin-top:3px;">${typeIcon} ${f.nextAction}${d?' '+d:''}</div>`;
+      statusLine += `<div style="font-size:10px;color:var(--mu);margin-top:2px;">${typeIcon} ${f.nextAction}${d?' '+d:''}</div>`;
     }
     return `<div onclick="openFicheModal('${f.id}')" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:10px;padding:10px 11px;margin-bottom:7px;cursor:pointer;transition:box-shadow .15s;" onmouseenter="this.style.boxShadow='0 2px 12px rgba(0,0,0,0.10)'" onmouseleave="this.style.boxShadow=''">
       <div style="font-size:12px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${(f.nom||'—').toUpperCase()}</div>
       ${f.quartier ? `<div style="font-size:10px;color:var(--mu);margin-top:1px;">📍 ${f.quartier}</div>` : '<div style="font-size:10px;color:#C0392B;margin-top:1px;">📍 Quartier non renseigné</div>'}
       ${statusLine}
       <div style="display:flex;align-items:center;gap:4px;margin-top:6px;">
-        <span style="display:inline-block;width:16px;height:3px;border-radius:2px;background:#1A7A3A;"></span>
-        <span style="display:inline-block;width:16px;height:3px;border-radius:2px;background:${f.statut==='assigne'||f.statut==='visite'?'#E8A000':'rgba(0,0,0,0.10)'};"></span>
-        <span style="display:inline-block;width:16px;height:3px;border-radius:2px;background:${f.statut==='visite'?'#1A7A3A':'rgba(0,0,0,0.10)'};"></span>
-        <span style="display:inline-block;width:16px;height:3px;border-radius:2px;background:rgba(0,0,0,0.07);"></span>
-        <span style="display:inline-block;width:16px;height:3px;border-radius:2px;background:rgba(0,0,0,0.07);"></span>
         ${evInitials ? `<span style="margin-left:auto;width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--c1),var(--c3));color:#fff;font-size:8px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${evInitials}</span>` : `<span style="margin-left:auto;font-size:9px;color:#C0392B;font-weight:700;">Non assigné</span>`}
       </div>
     </div>`;
   }
 
+  // ── Compteur global "fiches sans évangéliste", toutes zones confondues ──
+  // Distinct du problème de zone/quartier (bloc "non attribués" plus bas) :
+  // ici on regroupe uniquement le manque d'évangéliste, pour ne rien dupliquer
+  // avec le statut "🆕 Non confié" déjà visible dans chaque zone.
+  const fichesSansEv = fiches.filter(f => !f.evangelisteId);
+  const globalSansEvHtml = fichesSansEv.length ? `
+  <div style="background:var(--surface);border:1.5px solid rgba(192,57,43,0.3);border-radius:14px;margin-bottom:14px;overflow:hidden;">
+    <div onclick="toggleFichesSansEvGlobal()" id="fiches-sans-ev-toggle-header" style="padding:12px 16px;background:rgba(192,57,43,0.06);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;">
+      <span style="font-size:12px;font-weight:700;color:#C0392B;">🔴 ${fichesSansEv.length} fiche${fichesSansEv.length!==1?'s':''} sans évangéliste <span style="font-weight:400;color:var(--mu);">(toutes zones confondues)</span></span>
+      <span id="fiches-sans-ev-arrow" style="font-size:12px;color:var(--mu);">▶</span>
+    </div>
+    <div id="fiches-sans-ev-body" style="display:none;padding:10px;">
+      ${fichesSansEv.map(f => ficheKanbanCard(f)).join('')}
+    </div>
+  </div>` : '';
+
   // ── Rendu zones uniquement dans equipes-vue ──
-  el.innerHTML = zonesManagerHtml + EQUIPES.map(eq => {
+  el.innerHTML = globalSansEvHtml + zonesManagerHtml + EQUIPES.map(eq => {
     const style = equipeColors[eq];
     const fEq = fichesByEquipe[eq];
     const evEq = evActifs.filter(e => e.equipe === eq);
     const nbTotal = fEq.length;
-    const fNonConfies = fEq.filter(f => f.statut === 'nouveau');
-    const fEnCours = fEq.filter(f => f.statut === 'assigne');
-    const fVisites = fEq.filter(f => f.statut === 'visite');
     const evNames = evEq.map(e => e.nom).join(', ') || '—';
 
+    // Groupes selon la cadence de suivi (calculée, pas stockée)
+    const cadGroups = { non_confie: [], attente_1ere: [], actif: [], relancer: [], retard: [] };
+    fEq.forEach(f => { cadGroups[getCadenceStatus(f).key].push(f); });
+
+    // ── Indicateurs géographiques de la zone ──
+    const nbConfiees = fEq.filter(f => f.evangelisteId).length;
+    const tauxPriseEnCharge = nbTotal ? Math.round((nbConfiees / nbTotal) * 100) : 0;
+    const nbVisitees = fEq.filter(f => (f.observations||[]).length > 0).length;
+    const tauxVisite = nbConfiees ? Math.round((nbVisitees / nbConfiees) * 100) : 0;
+    const nbRetards = cadGroups.retard.length;
+
+    // Charge par évangéliste actif de la zone (fiches actives = ni perdues de vue, ni départ définitif)
+    const fActives = fEq.filter(f => f.statutMembre !== 'perdu_de_vue' && f.statutMembre !== 'depart_definitif');
+    const estOrpheline = nbTotal > 0 && evEq.length === 0;
+    const charge = evEq.length ? (fActives.length / evEq.length).toFixed(1) : null;
+
+    // Ancienneté moyenne du dernier contact (jours), sur les fiches ayant au moins une observation
+    const ficheAvecObs = fEq.filter(f => (f.observations||[]).length > 0);
+    let ancienneteMoy = null;
+    if (ficheAvecObs.length) {
+      const totalJours = ficheAvecObs.reduce((acc, f) => {
+        const obsT = f.observations.slice().sort((a,b) => new Date(b.dateVisite||b.date||0) - new Date(a.dateVisite||a.date||0))[0];
+        const d = new Date(obsT.dateVisite || obsT.date || 0);
+        return acc + Math.max(0, Math.floor((new Date(today + 'T12:00:00') - d) / 86400000));
+      }, 0);
+      ancienneteMoy = Math.round(totalJours / ficheAvecObs.length);
+    }
+
     const colStyle = (label, count, cards, colColor) => `
-      <div style="flex:1;min-width:0;background:rgba(0,0,0,0.035);border-radius:10px;padding:10px 8px;">
+      <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.035);border-radius:10px;padding:10px 8px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);">${label}</span>
           <span style="font-size:11px;font-weight:800;color:${colColor};background:rgba(0,0,0,0.06);padding:1px 7px;border-radius:20px;">${count}</span>
@@ -7133,18 +7329,34 @@ function renderEquipes() {
       </div>`;
 
     return `
-    <div style="background:${style.bg};border:1.5px solid ${style.border};border-radius:14px;overflow:hidden;margin-bottom:4px;">
+    <div style="background:${style.bg};border:1.5px solid ${estOrpheline?'#C0392B':style.border};border-radius:14px;overflow:hidden;margin-bottom:4px;">
       <div style="padding:12px 14px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid ${style.border};">
         <span style="width:10px;height:10px;border-radius:50%;background:${style.dot};flex-shrink:0;display:inline-block;"></span>
         <div style="flex:1;min-width:0;">
           <span style="font-size:14px;font-weight:700;color:${style.color};">${eq}</span>
           <span style="font-size:11px;color:var(--mu);margin-left:8px;">· ${nbTotal} fiche${nbTotal!==1?'s':''} · ${evNames}</span>
+          ${estOrpheline ? `<span style="font-size:10px;color:#C0392B;font-weight:700;margin-left:8px;">⚠️ Zone orpheline — aucun évangéliste actif</span>` : ''}
         </div>
       </div>
-      <div style="padding:10px 10px 12px;display:flex;gap:8px;">
-        ${colStyle('Non confiés', fNonConfies.length, fNonConfies, '#C0392B')}
-        ${colStyle('En cours', fEnCours.length, fEnCours, '#B86A00')}
-        ${colStyle('Visités', fVisites.length, fVisites, '#1A7A3A')}
+      <div style="padding:9px 14px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;border-bottom:1px solid ${style.border};background:rgba(255,255,255,0.35);">
+        <div style="flex:1;min-width:140px;">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mu);margin-bottom:3px;"><span>Prise en charge</span><span style="font-weight:700;color:${style.color};">${tauxPriseEnCharge}%</span></div>
+          <div style="height:5px;border-radius:3px;background:rgba(0,0,0,0.08);overflow:hidden;"><div style="height:100%;width:${tauxPriseEnCharge}%;background:${style.color};"></div></div>
+        </div>
+        <div style="flex:1;min-width:140px;">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mu);margin-bottom:3px;"><span>Taux de visite</span><span style="font-weight:700;color:${style.color};">${tauxVisite}%</span></div>
+          <div style="height:5px;border-radius:3px;background:rgba(0,0,0,0.08);overflow:hidden;"><div style="height:100%;width:${tauxVisite}%;background:${style.color};"></div></div>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:${nbRetards?'#C0392B':'var(--mu)'};white-space:nowrap;">⚠ ${nbRetards} retard${nbRetards!==1?'s':''}</div>
+        <div style="font-size:11px;font-weight:700;color:var(--mu);white-space:nowrap;">👤 ${charge===null?'—':charge+' fiches/évang.'}</div>
+        <div style="font-size:11px;font-weight:700;color:var(--mu);white-space:nowrap;">🕓 ${ancienneteMoy===null?'—':ancienneteMoy+' j depuis dernier contact (moy.)'}</div>
+      </div>
+      <div style="padding:10px 10px 12px;display:flex;flex-wrap:wrap;gap:8px;">
+        ${colStyle('🆕 Non confiés', cadGroups.non_confie.length, cadGroups.non_confie, '#C0392B')}
+        ${colStyle('📋 1ère visite en attente', cadGroups.attente_1ere.length, cadGroups.attente_1ere, '#B86A00')}
+        ${colStyle('🔄 Suivi actif', cadGroups.actif.length, cadGroups.actif, '#1A7A3A')}
+        ${colStyle('⏳ À relancer', cadGroups.relancer.length, cadGroups.relancer, '#B86A00')}
+        ${colStyle('⚠️ En retard', cadGroups.retard.length, cadGroups.retard, '#C0392B')}
       </div>
     </div>`;
   }).join('');
@@ -7167,7 +7379,7 @@ function renderEquipes() {
 
       elNA.innerHTML = `
         <p style="font-size:12px;color:var(--mu);margin-bottom:12px;">
-          ${fichesSansEquipe.length} fiche${fichesSansEquipe.length>1?'s':''} en attente d'assignation à une équipe
+          ${fichesSansEquipe.length} fiche${fichesSansEquipe.length>1?'s':''} dont le quartier est vide ou ne correspond à aucune zone créée — complétez la fiche ou ajoutez ce quartier dans une zone ci-dessus.
         </p>
         ${quartiersTriés.map(q => `
           <div style="margin-bottom:12px;">
