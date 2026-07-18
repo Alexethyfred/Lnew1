@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#7B1111">
-<title>Commission Témoignage — Paroisse de Fès </title>
+<title>Commission Témoignage — Paroisse de Fès v9</title>
 
 <!-- ── PWA : installable sur PC, Android, iOS ─────────────── -->
 <link rel="manifest" href="manifest.json">
@@ -2082,6 +2082,14 @@ body .animate, body .spinner, body [class*="anim"] {
         </div>
         <div style="font-size:11px;color:var(--mu);margin-top:6px;">"Envoyer maintenant" part tout de suite (email + notification interne), sans étape de validation. "Ajouter à la file" garde l'ancien fonctionnement : le message reste modifiable dans la file d'attente ci-dessous jusqu'à ce que vous cliquiez sur Envoyer.</div>
 
+      </div>
+
+      <div class="card" style="padding:18px;margin-bottom:14px;background:var(--bg2);">
+        <div class="chart-title" style="margin-bottom:4px;">🕐 Prochaines générations automatiques</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:12px;">Dates précises auxquelles les prochains rappels seront déposés dans la file ci-dessous, pour savoir quand revenir valider les envois.</div>
+        <div id="comm-prochaines-dates">
+          <div class="empty-state"><div class="ico">⏳</div><p>Calcul…</p></div>
+        </div>
       </div>
 
       <div class="card" style="padding:18px;margin-bottom:14px;">
@@ -5848,9 +5856,13 @@ function renderEvFicheCard(f) {
     + '<button class="act-type-btn" onclick="selectActType(\'' + f.id + '\',\'visite\',this)">\ud83d\udeb6 Visite</button>'
     + '<button class="act-type-btn on" onclick="selectActType(\'' + f.id + '\',\'appel\',this)">\ud83d\udcde Appel</button>'
     + '</div>'
+    + '<div style="margin:8px 0 4px;">'
+    + '<button type="button" class="act-type-btn" id="af-sansreponse-btn-' + f.id + '" onclick="toggleSansReponse(\'' + f.id + '\')" style="width:100%;">\ud83d\udd15 Sans r\u00e9ponse \u2014 aucun \u00e9change obtenu</button>'
+    + '</div>'
     + '<div class="new-obs-form" id="act-form-' + f.id + '">'
     + '<div class="new-obs-title">\u270f\ufe0f Nouveau compte-rendu</div>'
     + '<input type="hidden" id="af-type-' + f.id + '" value="appel">'
+    + '<input type="hidden" id="af-sansreponse-' + f.id + '" value="false">'
     + '<div class="field"><label>Date <span class="req">*</span></label>'
     + '<input type="date" id="af-date-' + f.id + '" value="' + today + '"></div>'
     + '<div class="field"><label>Compte-rendu <span style="font-weight:400;text-transform:none;font-size:10px;color:var(--mu);">(optionnel)</span></label>'
@@ -6195,6 +6207,7 @@ function _buildCommunicationHTML(titreBadge, contenuTexte) {
    des données fictives. ── */
 function initCommunications() {
   populateCommManuelSelect();
+  renderProchainesGenerationsAuto();
   if (!S.unsubCommunications) {
     S.unsubCommunications = window._listenCommunications(list => {
       S.commQueue = list;
@@ -6210,6 +6223,69 @@ function initCommunications() {
       renderCommHistorique();
     });
   }
+}
+
+/* ── Prochaines générations automatiques (dates précises) ───
+   Reproduit EXACTEMENT la même logique de date que send-reminders.js
+   (côté serveur) pour annoncer, côté client, à quelle date précise
+   chaque rappel automatique sera déposé dans la file d'attente —
+   sans attendre de le découvrir après coup. Les rappels "action
+   prévue (48h)" et la livraison des notifications déjà demandées ne
+   dépendent pas d'une date fixe mais du passage du script toutes les
+   ~15 minutes : on l'indique tel quel plutôt que d'inventer une heure
+   précise qui serait fausse. */
+function _prochainDimancheRappelHebdo(depuis) {
+  for (let i = 0; i < 60; i++) {
+    const d = new Date(depuis.getFullYear(), depuis.getMonth(), depuis.getDate() + i);
+    if (d.getDay() === 0) { // dimanche
+      const dernierJour = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const semaine1 = d.getDate() <= 7;
+      const derniereSemaine = d.getDate() > dernierJour - 7;
+      if (semaine1 || derniereSemaine) return d;
+    }
+  }
+  return null;
+}
+function _prochaineFenetreVisiteMois(depuis) {
+  const fenetreDebut = (annee, mois) => {
+    const dernierJour = new Date(annee, mois + 1, 0).getDate();
+    return new Date(annee, mois, dernierJour - 7);
+  };
+  const debutCeMois = fenetreDebut(depuis.getFullYear(), depuis.getMonth());
+  const finFenetreCeMois = new Date(debutCeMois);
+  finFenetreCeMois.setDate(debutCeMois.getDate() + 2);
+  finFenetreCeMois.setHours(23, 59, 59, 999);
+  if (depuis <= finFenetreCeMois) return debutCeMois;
+  const moisSuivant = depuis.getMonth() + 1;
+  const anneeSuivante = depuis.getFullYear() + (moisSuivant > 11 ? 1 : 0);
+  return fenetreDebut(anneeSuivante, moisSuivant % 12);
+}
+function renderProchainesGenerationsAuto() {
+  const el = document.getElementById('comm-prochaines-dates');
+  if (!el) return;
+  const now = new Date();
+  const optsDate = { weekday: 'long', day: 'numeric', month: 'long' };
+  const hebdo = _prochainDimancheRappelHebdo(now);
+  const visite = _prochaineFenetreVisiteMois(now);
+
+  const ligne = (icone, label, dateTexte, detail) =>
+    `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--bo);">`
+    + `<span style="font-size:16px;">${icone}</span>`
+    + `<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--tx);">${label}</div>`
+    + `<div style="font-size:12px;color:var(--c1);font-weight:600;">${dateTexte}</div>`
+    + (detail ? `<div style="font-size:11px;color:var(--mu);margin-top:2px;">${detail}</div>` : '')
+    + `</div></div>`;
+
+  el.innerHTML =
+      ligne('📅', 'Rappel hebdomadaire (contacter ses fiches)',
+        hebdo ? hebdo.toLocaleDateString('fr-FR', optsDate) : '—',
+        'Rattrapage automatique le lundi si le dimanche est manqué.')
+    + ligne('🚶', 'Rappel visite mensuelle accompagnée',
+        visite ? `à partir du ${visite.toLocaleDateString('fr-FR', optsDate)}` : '—',
+        'Fenêtre de 3 jours — seulement pour les évangélistes ayant des fiches ce mois-ci.')
+    + ligne('⏰', 'Rappels "action prévue" (48h avant) + livraison des notifications déjà validées',
+        'Vérifié en continu',
+        'Toutes les ~15 minutes, dès qu\'une fiche entre dans la fenêtre des 48h ou qu\'un envoi est en attente de livraison.');
 }
 
 const _COMM_TYPE_LABELS = {
@@ -7509,6 +7585,21 @@ function crModeleParDefaut(type, prenom) {
   return modeles[type] || '';
 }
 
+/* Modèle "sans réponse" : même principe que crModeleParDefaut (texte de
+   départ modifiable), mais pour le cas où la tentative de contact n'a
+   abouti à aucun échange (message non répondu, appel non décroché,
+   personne absente lors du passage). Toujours cohérent avec le type
+   d'action choisi, jamais un texte générique déconnecté du contexte. */
+function crModeleSansReponse(type, prenom) {
+  const nom = (prenom || '').trim() || 'la personne';
+  const modeles = {
+    appel:   `J'ai contacté ${nom} par téléphone, je n'ai eu aucune réponse.`,
+    visite:  `Je me suis rendu(e) chez ${nom}, je n'ai obtenu aucune réponse.`,
+    message: `J'ai contacté ${nom} par message, je n'ai eu aucune réponse.`
+  };
+  return modeles[type] || '';
+}
+
 /* ── MESSAGES WHATSAPP SUGGÉRÉS SELON L'ÉTAPE DE SUIVI ──────
    L'app propose automatiquement, pour chaque personne suivie,
    le message le plus adapté à sa situation — tout en laissant
@@ -7669,15 +7760,62 @@ function selectActType(ficheId, type, btn) {
 
   // Pré-remplir le compte-rendu avec le modèle du nouveau type, sauf si
   // l'évangéliste a déjà personnalisé le texte (on ne l'écrase jamais).
+  // Le modèle utilisé (normal ou "sans réponse") suit l'état actuel du
+  // bouton "Sans réponse", pour rester cohérent avec ce qui est affiché.
   const champ = document.getElementById(`af-note-${ficheId}`);
   if (champ && type !== ancienType) {
     const fiche = (S.myFiches || []).find(f => f.id === ficheId) || (S.fiches || []).find(f => f.id === ficheId);
-    const modeleAncien = ancienType ? crModeleParDefaut(ancienType, fiche?.prenom) : '';
+    const sansReponse = document.getElementById(`af-sansreponse-${ficheId}`)?.value === 'true';
+    const modeleFn = sansReponse ? crModeleSansReponse : crModeleParDefaut;
+    const modeleAncien = ancienType ? modeleFn(ancienType, fiche?.prenom) : '';
     const estVide = !champ.value.trim();
     const estModeleNonModifie = champ.value === modeleAncien;
     if (estVide || estModeleNonModifie) {
-      champ.value = crModeleParDefaut(type, fiche?.prenom);
+      champ.value = modeleFn(type, fiche?.prenom);
       sauvegarderBrouillon(ficheId);
+    }
+  }
+}
+
+/* ── Bascule "Sans réponse" ────────────────────────────────
+   Quand l'évangéliste envoie un message ou tente un appel sans
+   obtenir de réponse, ce bouton remplace le modèle de compte-rendu
+   "tout va bien" (qui suppose un échange réel) par un modèle
+   cohérent avec l'absence de réponse — et suggère une prochaine
+   action rapprochée (réessayer sous 3 jours), plus adaptée qu'un
+   suivi à 2 semaines quand aucun contact n'a encore eu lieu. Le
+   texte reste entièrement modifiable, comme les autres modèles. ── */
+function toggleSansReponse(ficheId) {
+  const champState = document.getElementById(`af-sansreponse-${ficheId}`);
+  const btn = document.getElementById(`af-sansreponse-btn-${ficheId}`);
+  if (!champState || !btn) return;
+  const type = document.getElementById(`af-type-${ficheId}`)?.value || 'appel';
+  const fiche = (S.myFiches || []).find(f => f.id === ficheId) || (S.fiches || []).find(f => f.id === ficheId);
+  const champNote = document.getElementById(`af-note-${ficheId}`);
+  const nouvelEtat = champState.value !== 'true';
+  champState.value = nouvelEtat ? 'true' : 'false';
+  btn.classList.toggle('on', nouvelEtat);
+
+  // Basculer le texte du compte-rendu entre les deux modèles, sauf si
+  // l'évangéliste l'a déjà personnalisé (jamais d'écrasement forcé).
+  if (champNote) {
+    const modeleAvant = (nouvelEtat ? crModeleParDefaut : crModeleSansReponse)(type, fiche?.prenom);
+    const estVide = !champNote.value.trim();
+    const estModeleNonModifie = champNote.value === modeleAvant;
+    if (estVide || estModeleNonModifie) {
+      champNote.value = (nouvelEtat ? crModeleSansReponse : crModeleParDefaut)(type, fiche?.prenom);
+      sauvegarderBrouillon(ficheId);
+    }
+  }
+
+  // Suggestion automatique d'une prochaine action rapprochée, uniquement
+  // à l'activation et uniquement si les champs sont encore vides — pour
+  // ne jamais écraser une saisie déjà faite par l'évangéliste.
+  if (nouvelEtat) {
+    const champAction = document.getElementById(`af-next-${ficheId}`);
+    const champDate = document.getElementById(`af-next-date-${ficheId}`);
+    if (champAction && champDate && !champAction.value.trim() && !champDate.value) {
+      suggererProchaineAction(ficheId, 3, '🔁 Réessayer le contact');
     }
   }
 }
@@ -7689,11 +7827,16 @@ async function saveEvActivity(ficheId) {
   const duree   = document.getElementById(`af-duree-${ficheId}`)?.value;
   const next    = document.getElementById(`af-next-${ficheId}`)?.value.trim();
   const nextDate= document.getElementById(`af-next-date-${ficheId}`)?.value;
+  const sansReponse = document.getElementById(`af-sansreponse-${ficheId}`)?.value === 'true';
 
   if (!date) return toast('⚠️ La date est requise');
   // Compte-rendu optionnel : un texte par défaut est utilisé si rien n'est saisi,
   // pour ne pas bloquer l'enregistrement (mieux vaut une trace minimale que rien).
-  const noteFinale = note || { appel: 'Appel effectué', visite: 'Visite effectuée', message: 'Message envoyé' }[type] || 'Contact effectué';
+  // Le texte de secours reste cohérent avec l'état "Sans réponse".
+  const noteFinale = note || (sansReponse
+    ? { appel: 'Contact par téléphone, aucune réponse', visite: 'Visite, aucune réponse', message: 'Contact par message, aucune réponse' }[type]
+    : { appel: 'Appel effectué', visite: 'Visite effectuée', message: 'Message envoyé' }[type]
+  ) || 'Contact effectué';
 
   // Récupérer les co-participants si c'est une visite
   const equipe = type === 'visite'
@@ -7716,6 +7859,7 @@ async function saveEvActivity(ficheId) {
       type, date,
       duree:          duree ? parseInt(duree) : null,
       note:           noteFinale,
+      sansReponse:    sansReponse,
       equipe:         equipe.length ? equipe : null,
       autresPresents: autresPresents,
       nextAction:     next || null,
@@ -7754,6 +7898,11 @@ async function saveEvActivity(ficheId) {
     effacerBrouillon(ficheId);
     [`af-note-${ficheId}`,`af-next-${ficheId}`,`af-duree-${ficheId}`,`af-autres-${ficheId}`].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById(`af-next-date-${ficheId}`)?.value && (document.getElementById(`af-next-date-${ficheId}`).value='');
+    // Réinitialiser la bascule "Sans réponse" pour le prochain compte-rendu
+    const champSR = document.getElementById(`af-sansreponse-${ficheId}`);
+    const btnSR = document.getElementById(`af-sansreponse-btn-${ficheId}`);
+    if (champSR) champSR.value = 'false';
+    if (btnSR) btnSR.classList.remove('on');
     // Reset checkboxes participants
     document.querySelectorAll(`input[name="af-ev-${ficheId}"]`).forEach(cb => { cb.checked = false; const lbl = cb.closest('label'); if (lbl) { lbl.style.borderColor=''; lbl.style.background=''; lbl.style.color=''; } });
     // Recharger historique
@@ -12980,6 +13129,7 @@ if (_origInitDash) {
           <p>Si vous n'avez pas envie de taper avec les doigts, il y a un petit rond avec un micro (🎤) juste à côté de cette case : appuyez dessus, parlez normalement à voix haute en racontant l'échange, et le texte s'écrit tout seul dans la case au fur et à mesure que vous parlez. Appuyez de nouveau sur le micro pour arrêter.</p>
           <p>Ne vous inquiétez pas si l'app se ferme pendant que vous écrivez (un appel qui arrive, le téléphone qui s'éteint, une fermeture accidentelle) : rien n'est perdu. L'app enregistre votre texte automatiquement au fur et à mesure, en arrière-plan, sans que vous ayez besoin d'appuyer sur "Enregistrer". Si vous rouvrez la même fiche plus tard, votre texte sera encore là.</p>
           <p>Une fois le formulaire rempli, il y a un bouton en bas (généralement écrit <strong>"💾 Enregistrer"</strong>) : appuyez dessus une seule fois pour que le compte-rendu soit sauvegardé définitivement.</p>
+          <p>Si vous avez appelé ou envoyé un message et que vous <strong>n'avez obtenu aucune réponse</strong>, touchez le bouton <strong>"🔕 Sans réponse — aucun échange obtenu"</strong> juste au-dessus de la case de texte. Le texte tout prêt change automatiquement pour refléter la réalité (par exemple "J'ai contacté [prénom] par message, je n'ai eu aucune réponse" au lieu d'un texte qui suppose à tort que vous avez pu échanger), quel que soit le message que vous aviez envoyé au départ (premier contact, prise de nouvelles, ou autre). Une prochaine action "🔁 Réessayer le contact" dans 3 jours est aussi suggérée automatiquement. Vous restez libre de tout modifier, comme pour les autres modèles de texte.</p>
         </div>
 
         <div class="aide-section">
