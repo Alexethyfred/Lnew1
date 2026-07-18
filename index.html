@@ -1932,17 +1932,18 @@ body .animate, body .spinner, body [class*="anim"] {
       <div class="card" style="padding:16px;margin-bottom:16px;">
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--c1);margin-bottom:12px;">➕ Enregistrer une activité</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <select id="act-fiche" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);-webkit-appearance:none;appearance:none;">
+          <select id="act-fiche" onchange="onActFicheChange()" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);-webkit-appearance:none;appearance:none;">
             <option value="">— Choisir une fiche —</option>
           </select>
-          <select id="act-type" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);-webkit-appearance:none;appearance:none;">
-            <option value="appel">📞 Appel</option>
-            <option value="visite">🚶 Visite</option>
-            <option value="message">💬 Message WhatsApp</option>
-          </select>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
           <input type="date" id="act-date" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
+        </div>
+        <div class="act-type-btns" id="act-type-btns" style="margin-bottom:10px;">
+          <button type="button" class="act-type-btn on" onclick="selectActTypeGlobal('appel',this)">📞 Appel</button>
+          <button type="button" class="act-type-btn" onclick="selectActTypeGlobal('visite',this)">🚶 Visite</button>
+          <button type="button" class="act-type-btn" onclick="selectActTypeGlobal('message',this)">💬 Message</button>
+        </div>
+        <input type="hidden" id="act-type" value="appel">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
           <input type="number" id="act-duree" placeholder="Durée (min)" min="1" max="300" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
         </div>
         <div style="position:relative;">
@@ -7775,8 +7776,35 @@ async function saveActivity() {
     ['act-note','act-next','act-duree'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     ['act-next-date'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById('act-fiche').value = '';
+    document.querySelectorAll('#act-type-btns .act-type-btn').forEach(b => b.classList.remove('on'));
+    document.querySelector('#act-type-btns .act-type-btn')?.classList.add('on');
+    document.getElementById('act-type').value = 'appel';
     toast('✅ ' + (typeIcons[type]||'') + ' Activité enregistrée !');
   } catch(err) { console.error(err); toast('❌ Erreur enregistrement'); }
+}
+
+/* ── Formulaire rapide responsable : boutons de type avec modèle
+   auto-rempli (même logique que le formulaire évangéliste par fiche),
+   pour que la responsable puisse proposer une action à n'importe
+   quelle fiche du système, avec un compte-rendu de départ prêt à
+   adapter. ── */
+function selectActTypeGlobal(type, btn) {
+  document.querySelectorAll('#act-type-btns .act-type-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  const inp = document.getElementById('act-type');
+  if (inp) inp.value = type;
+  const ficheId = document.getElementById('act-fiche')?.value;
+  const fiche = (S.fiches || []).find(f => f.id === ficheId);
+  const champ = document.getElementById('act-note');
+  if (champ) champ.value = crModeleParDefaut(type, fiche?.prenom);
+}
+
+function onActFicheChange() {
+  const ficheId = document.getElementById('act-fiche')?.value;
+  const fiche = (S.fiches || []).find(f => f.id === ficheId);
+  const type = document.getElementById('act-type')?.value || 'appel';
+  const champ = document.getElementById('act-note');
+  if (champ && fiche) champ.value = crModeleParDefaut(type, fiche.prenom);
 }
 
 /* ── SAUVEGARDER ACTIVITÉ (évangéliste depuis sa fiche) ─── */
@@ -7970,22 +7998,19 @@ function selectActType(ficheId, type, btn) {
   const participantsWrap = document.getElementById(`af-participants-wrap-${ficheId}`);
   if (participantsWrap) participantsWrap.style.display = type === 'visite' ? 'block' : 'none';
 
-  // Pré-remplir le compte-rendu avec le modèle du nouveau type, sauf si
-  // l'évangéliste a déjà personnalisé le texte (on ne l'écrase jamais).
-  // Le modèle utilisé (normal ou "sans réponse") suit l'état actuel du
-  // bouton "Sans réponse", pour rester cohérent avec ce qui est affiché.
+  // Pré-remplir le compte-rendu avec le modèle du nouveau type — change
+  // automatiquement à chaque bascule de type, même si le texte affiché
+  // avait déjà été modifié (plus besoin de tout effacer à la main pour
+  // revenir au modèle). Le modèle utilisé (normal ou "sans réponse")
+  // suit l'état actuel du bouton "Sans réponse", pour rester cohérent
+  // avec ce qui est affiché.
   const champ = document.getElementById(`af-note-${ficheId}`);
   if (champ && type !== ancienType) {
     const fiche = (S.myFiches || []).find(f => f.id === ficheId) || (S.fiches || []).find(f => f.id === ficheId);
     const sansReponse = document.getElementById(`af-sansreponse-${ficheId}`)?.value === 'true';
     const modeleFn = sansReponse ? crModeleSansReponse : crModeleParDefaut;
-    const modeleAncien = ancienType ? modeleFn(ancienType, fiche?.prenom) : '';
-    const estVide = !champ.value.trim();
-    const estModeleNonModifie = champ.value === modeleAncien;
-    if (estVide || estModeleNonModifie) {
-      champ.value = modeleFn(type, fiche?.prenom);
-      sauvegarderBrouillon(ficheId);
-    }
+    champ.value = modeleFn(type, fiche?.prenom);
+    sauvegarderBrouillon(ficheId);
   }
 }
 
