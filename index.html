@@ -1957,6 +1957,17 @@ body .animate, body .spinner, body [class*="anim"] {
         <button class="btn btn-primary btn-full" onclick="saveActivity()">💾 Enregistrer</button>
       </div>
 
+      <!-- MESSAGE GROUPÉ PAR ZONE (RESPONSABLE) -->
+      <div class="card" style="padding:16px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--c1);margin-bottom:12px;">💬 Message groupé par zone</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:10px;">Choisissez une zone, sélectionnez les fiches à contacter, puis écrivez un seul message envoyé via WhatsApp à chacune (un lien par personne, comme le fait déjà l'évangéliste). Chaque envoi confirmé est enregistré comme activité, visible par l'évangéliste chargé de la fiche, avec "Responsable" comme auteur.</div>
+        <select id="resp-zone-select" onchange="renderRespZoneFiches()" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);-webkit-appearance:none;appearance:none;margin-bottom:10px;">
+          <option value="">— Choisir une zone —</option>
+        </select>
+        <div id="resp-zone-fiches-list"></div>
+        <button class="btn btn-primary btn-full" style="margin-top:10px;" onclick="lancerMessageGroupeZoneResp()">💬 Écrire le message (<span id="resp-zone-nb-select">0</span> sélectionné(s))</button>
+      </div>
+
       <!-- FILTRE PÉRIODE + ACCORDION SUIVI -->
       <div style="background:var(--bg2);border:1.5px solid var(--bo);border-radius:14px;overflow:hidden;margin-bottom:14px;">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none;" onclick="toggleSuiviEvBlocs(this)">
@@ -3916,12 +3927,16 @@ function majBarreSelection() {
   count.textContent = `${n} sélectionnée${n > 1 ? 's' : ''}`;
 }
 
+function _poolFichesEnvoiGroupe() {
+  return ((S.role === 'resp' ? S.fiches : S.myFiches) || []);
+}
+
 function ouvrirMessageGroupe() {
   const modal = document.getElementById('modal-msg-groupe');
   if (!modal) return;
   if (!_fichesSelectionnees.size) return toast('⚠️ Aucune fiche sélectionnée');
 
-  const fiches = (S.myFiches || []).filter(f => _fichesSelectionnees.has(f.id));
+  const fiches = _poolFichesEnvoiGroupe().filter(f => _fichesSelectionnees.has(f.id));
   // Le modèle suggéré se base sur la 1ère personne sélectionnée ; il reste
   // modifiable et s'applique (personnalisé au prénom) à tout le groupe.
   const cleSuggeree = fiches.length ? suggererModeleMessage(fiches[0]) : 'premier_contact';
@@ -3968,7 +3983,7 @@ function demarrerEnvoiGroupe() {
   const texte = document.getElementById('msg-groupe-texte')?.value.trim();
   if (!texte) { toast('⚠️ Écrivez un message'); return; }
   _envoiGroupeTexte = texte;
-  _envoiGroupeQueue = (S.myFiches || []).filter(f => !f.deleted && _fichesSelectionnees.has(f.id) && (f.telephone || '').trim());
+  _envoiGroupeQueue = _poolFichesEnvoiGroupe().filter(f => !f.deleted && _fichesSelectionnees.has(f.id) && (f.telephone || '').trim());
   _envoiGroupeIndex = 0;
   _envoiGroupeEnvoyes = 0;
 
@@ -4040,6 +4055,7 @@ function terminerEnvoiGroupe() {
   // se contente de vider la sélection sans activer le mode.
   if (_selectionModeActif) toggleModeSelection();
   else _fichesSelectionnees.clear();
+  if (S.role === 'resp') { _respZoneSelection.clear(); renderRespZoneFiches(); }
 }
 
 function renderFiches() {
@@ -7160,7 +7176,7 @@ function switchTab(name, btn) {
   if (tabEl) tabEl.classList.add('on');
   if (name === 'analytics') { setTimeout(renderAnalytics, 50); }
   if (name === 'suivi') {
-    initActivities(); populateActFicheSelect(); renderSuivi(); initActDate();
+    initActivities(); populateActFicheSelect(); renderSuivi(); initActDate(); populateRespZoneSelect();
     const badge = document.getElementById('notif-badge');
     if (badge) badge.style.display = 'none';
   }
@@ -7805,6 +7821,62 @@ function onActFicheChange() {
   const type = document.getElementById('act-type')?.value || 'appel';
   const champ = document.getElementById('act-note');
   if (champ && fiche) champ.value = crModeleParDefaut(type, fiche.prenom);
+}
+
+/* ── Message groupé WhatsApp par zone, côté responsable ─────
+   Réutilise exactement le flux existant côté évangéliste
+   (ouvrirMessageGroupe / demarrerEnvoiGroupe / confirmerEnvoiGroupe) :
+   on remplit juste _fichesSelectionnees à partir des fiches de la zone
+   choisie, avec le nom de l'évangéliste chargé affiché pour chaque
+   fiche. ── */
+let _respZoneSelection = new Set();
+
+function populateRespZoneSelect() {
+  const sel = document.getElementById('resp-zone-select');
+  if (!sel) return;
+  const cur = sel.value;
+  const zones = (S.zones && S.zones.length) ? S.zones.map(z => z.nom) : ['Euromed', 'Sebaa Rouadi', 'Chaima', 'Bensouda', 'Lido', 'Atlas', 'Mont Fleuri', 'Narjiss'];
+  sel.innerHTML = '<option value="">— Choisir une zone —</option>' + zones.map(z => `<option value="${z}" ${cur === z ? 'selected' : ''}>${z}</option>`).join('');
+}
+
+function renderRespZoneFiches() {
+  const zone = document.getElementById('resp-zone-select')?.value;
+  const el = document.getElementById('resp-zone-fiches-list');
+  if (!el) return;
+  _respZoneSelection.clear();
+  majRespZoneCount();
+  if (!zone) { el.innerHTML = ''; return; }
+  const fiches = (S.fiches || []).filter(f => !f.deleted && getEquipeForQuartier(f.quartier) === zone);
+  if (!fiches.length) {
+    el.innerHTML = '<div style="padding:10px 2px;font-size:12px;color:var(--mu);">Aucune fiche dans cette zone.</div>';
+    return;
+  }
+  el.innerHTML = fiches.map(f => {
+    const ev = (S.evs || []).find(e => e.id === f.evangelisteId);
+    const sansTel = !(f.telephone || '').trim();
+    return `<label style="display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid var(--bo);font-size:13px;${sansTel ? 'opacity:.5;' : ''}">
+      <input type="checkbox" ${sansTel ? 'disabled title="Pas de numéro"' : ''} onchange="toggleRespZoneFiche('${f.id}')">
+      <span style="flex:1;">${f.nom || ''} ${f.prenom || ''}</span>
+      <span style="font-size:11px;color:var(--mu);white-space:nowrap;">${ev ? '👤 ' + ev.nom : '— non confiée'}</span>
+    </label>`;
+  }).join('');
+}
+
+function toggleRespZoneFiche(ficheId) {
+  if (_respZoneSelection.has(ficheId)) _respZoneSelection.delete(ficheId);
+  else _respZoneSelection.add(ficheId);
+  majRespZoneCount();
+}
+
+function majRespZoneCount() {
+  const el = document.getElementById('resp-zone-nb-select');
+  if (el) el.textContent = _respZoneSelection.size;
+}
+
+function lancerMessageGroupeZoneResp() {
+  if (!_respZoneSelection.size) return toast('⚠️ Sélectionnez au moins une fiche');
+  _fichesSelectionnees = new Set(_respZoneSelection);
+  ouvrirMessageGroupe();
 }
 
 /* ── SAUVEGARDER ACTIVITÉ (évangéliste depuis sa fiche) ─── */
