@@ -1957,6 +1957,15 @@ body .animate, body .spinner, body [class*="anim"] {
         <button class="btn btn-primary btn-full" onclick="saveActivity()">💾 Enregistrer</button>
       </div>
 
+      <!-- IDENTITÉ D'ENVOI RESPONSABLE (numéro WhatsApp émetteur) -->
+      <div class="card" style="padding:16px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--c1);margin-bottom:12px;">📱 Mon identité d'envoi</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:10px;">Choisissez le profil correspondant au numéro WhatsApp utilisé sur cet appareil pour les envois par zone. Reste interne : l'évangéliste ne voit jamais ce nom, seulement "Responsable".</div>
+        <select id="resp-identity-select" onchange="onRespIdentityChange()" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);-webkit-appearance:none;appearance:none;">
+          <option value="">— Choisir mon profil —</option>
+        </select>
+      </div>
+
       <!-- MESSAGE GROUPÉ PAR ZONE (RESPONSABLE) -->
       <div class="card" style="padding:16px;margin-bottom:16px;">
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--c1);margin-bottom:12px;">💬 Message groupé par zone</div>
@@ -3992,6 +4001,9 @@ function demarrerEnvoiGroupe() {
 
   if (!_envoiGroupeQueue.length) { toast('❌ Aucun contact avec téléphone dans la sélection'); return; }
 
+  const nEl0 = document.getElementById('msg-groupe-next'); if (nEl0) nEl0.value = '';
+  const ndEl0 = document.getElementById('msg-groupe-next-date'); if (ndEl0) ndEl0.value = '';
+
   document.getElementById('msg-groupe-etape-redaction').style.display = 'none';
   document.getElementById('msg-groupe-etape-envoi').style.display = 'block';
   afficherContactGroupeCourant();
@@ -4013,6 +4025,11 @@ function afficherContactGroupeCourant() {
 
 async function confirmerEnvoiGroupe() {
   const f = _envoiGroupeQueue[_envoiGroupeIndex];
+  const next     = document.getElementById('msg-groupe-next')?.value.trim() || null;
+  const nextDate = next ? (document.getElementById('msg-groupe-next-date')?.value || null) : null;
+  // Numéro émetteur : uniquement pour traçabilité interne, jamais affiché
+  // à l'évangéliste (voir "Mon identité d'envoi" côté Responsable).
+  const identity = S.role === 'resp' ? getRespIdentityEv() : null;
   // Trace l'activité "message" pour garder le suivi à jour sans effort
   try {
     await window._saveActivity({
@@ -4022,17 +4039,24 @@ async function confirmerEnvoiGroupe() {
       date: new Date().toISOString().split('T')[0],
       duree: null,
       note: 'Message WhatsApp groupé envoyé',
-      nextAction: null, nextActionDate: null,
+      nextAction: next, nextActionDate: nextDate,
       parId: S.evId || 'admin',
       parNom: S.evNom || 'Responsable',
       evangelisteId: f.evangelisteId || S.evId || null,
+      numeroEmetteur: identity?.telephone || null,
+      emetteurId: identity?.id || null,
     });
+    if (next && f.id) await window._setNextAction(f.id, next, nextDate, whoAmI());
   } catch (e) { console.error(e); }
   _envoiGroupeEnvoyes++;
+  const nEl = document.getElementById('msg-groupe-next'); if (nEl) nEl.value = '';
+  const ndEl = document.getElementById('msg-groupe-next-date'); if (ndEl) ndEl.value = '';
   passerAuSuivantGroupe();
 }
 
 function passerContactGroupe() {
+  const nEl = document.getElementById('msg-groupe-next'); if (nEl) nEl.value = '';
+  const ndEl = document.getElementById('msg-groupe-next-date'); if (ndEl) ndEl.value = '';
   passerAuSuivantGroupe();
 }
 
@@ -7176,7 +7200,7 @@ function switchTab(name, btn) {
   if (tabEl) tabEl.classList.add('on');
   if (name === 'analytics') { setTimeout(renderAnalytics, 50); }
   if (name === 'suivi') {
-    initActivities(); populateActFicheSelect(); renderSuivi(); initActDate(); populateRespZoneSelect();
+    initActivities(); populateActFicheSelect(); renderSuivi(); initActDate(); populateRespZoneSelect(); populateRespIdentitySelect();
     const badge = document.getElementById('notif-badge');
     if (badge) badge.style.display = 'none';
   }
@@ -7831,6 +7855,37 @@ function onActFicheChange() {
    fiche. ── */
 let _respZoneSelection = new Set();
 
+/* ── Identité d'envoi du Respo (numéro WhatsApp émetteur) ───
+   Le compte "Responsable" est partagé entre plusieurs personnes.
+   Chacune choisit, sur son propre appareil, quel profil évangéliste
+   correspond à son numéro WhatsApp réel — utilisé uniquement comme
+   numéro émetteur tracé sur les activités envoyées depuis cet
+   appareil. Le nom affiché à l'évangéliste reste "Responsable",
+   jamais ce nom réel (voir whoAmI()). ── */
+const RESP_IDENTITY_KEY = 'eeam_resp_identity_evid';
+
+function populateRespIdentitySelect() {
+  const sel = document.getElementById('resp-identity-select');
+  if (!sel) return;
+  const saved = localStorage.getItem(RESP_IDENTITY_KEY) || '';
+  const evsAvecTel = (S.evs || []).filter(e => e.actif !== false && (e.telephone || '').trim());
+  sel.innerHTML = '<option value="">— Choisir mon profil —</option>' +
+    evsAvecTel.map(e => `<option value="${e.id}" ${e.id === saved ? 'selected' : ''}>${_esc(e.nom || '')} — ${_esc(e.telephone || '')}</option>`).join('');
+  if (saved && !evsAvecTel.find(e => e.id === saved)) localStorage.removeItem(RESP_IDENTITY_KEY);
+}
+
+function onRespIdentityChange() {
+  const val = document.getElementById('resp-identity-select')?.value || '';
+  if (val) { localStorage.setItem(RESP_IDENTITY_KEY, val); toast('✅ Identité d\'envoi enregistrée sur cet appareil'); }
+  else localStorage.removeItem(RESP_IDENTITY_KEY);
+}
+
+function getRespIdentityEv() {
+  const id = localStorage.getItem(RESP_IDENTITY_KEY);
+  if (!id) return null;
+  return (S.evs || []).find(e => e.id === id) || null;
+}
+
 function populateRespZoneSelect() {
   const sel = document.getElementById('resp-zone-select');
   if (!sel) return;
@@ -7875,6 +7930,7 @@ function majRespZoneCount() {
 
 function lancerMessageGroupeZoneResp() {
   if (!_respZoneSelection.size) return toast('⚠️ Sélectionnez au moins une fiche');
+  if (!getRespIdentityEv()) return toast('⚠️ Choisissez d\'abord votre identité d\'envoi (numéro WhatsApp émetteur) en haut de la page');
   _fichesSelectionnees = new Set(_respZoneSelection);
   ouvrirMessageGroupe();
 }
@@ -13608,6 +13664,10 @@ if (_origInitDash) {
         </div>
         <div style="background:var(--bg2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--tx);white-space:pre-wrap;margin-bottom:16px;max-height:150px;overflow-y:auto;" id="msg-groupe-apercu"></div>
         <a id="msg-groupe-lien-wa" href="#" target="_blank" rel="noopener" class="btn btn-primary btn-full" style="margin-bottom:10px;display:block;text-align:center;text-decoration:none;">💬 Ouvrir WhatsApp pour envoyer</a>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+          <input type="text" id="msg-groupe-next" placeholder="Prochaine action (optionnel)" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
+          <input type="date" id="msg-groupe-next-date" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">
+        </div>
         <div style="display:flex;gap:8px;">
           <button class="btn btn-outline" style="flex:1;" onclick="passerContactGroupe()">Passer (sans envoyer)</button>
           <button class="btn btn-primary" style="flex:1;" onclick="confirmerEnvoiGroupe()">✅ Envoyé, suivant</button>
