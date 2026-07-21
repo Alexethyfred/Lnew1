@@ -6871,7 +6871,6 @@ function _construireContenuRappelManuel(type, ev) {
   const mesFiches = (S.fiches || []).filter(f => !f.deleted && f.evangelisteId === ev.id);
   if (type === 'hebdo') {
     const now = new Date();
-    const v = versets[0];
     const weekAgo = new Date(now.getTime() - 30 * 86400000);
     const actEv = (S.activities || []).filter(a =>
       a.evangelisteId === ev.id && a.date && new Date(a.date + 'T12:00:00') >= weekAgo
@@ -6885,37 +6884,37 @@ function _construireContenuRappelManuel(type, ev) {
     const objectifAtteintSemaine = mesFiches.length > 0 && nbContacteesSemaine === mesFiches.length;
     const bilanSemainePassee = mesFiches.length
       ? (objectifAtteintSemaine
-          ? `✅ Bilan de la semaine passée : objectif atteint ! Vous avez pris des nouvelles de vos ${mesFiches.length} fiche(s) assignée(s). Merci pour votre fidélité !`
-          : `📊 Bilan de la semaine passée : ${nbContacteesSemaine}/${mesFiches.length} fiche(s) contactée(s) — objectif non atteint.${fichesNonContacteesSemaine.length ? `\n⚠️ Encore à contacter :\n${fichesNonContacteesSemaine.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}` : ''}`)
+          ? `Objectif atteint ! Vous avez pris des nouvelles de vos ${mesFiches.length} fiche(s) assignée(s). Merci pour votre fidélité !\n\n${nbVisites} visite(s) et ${nbAppelsMsg} message(s) / appel(s)`
+          : `${nbContacteesSemaine}/${mesFiches.length} fiche(s) contactée(s) — objectif non atteint.${fichesNonContacteesSemaine.length ? `\n⚠️ Encore à contacter :\n${fichesNonContacteesSemaine.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}` : ''}\n\n${nbVisites} visite(s) et ${nbAppelsMsg} message(s) / appel(s)`)
       : '';
+    const versetHebdo = `Actes 20:28\n« Prenez garde à vous-mêmes et à tout le troupeau dont l'Esprit Saint vous a confié la responsabilité ; prenez soin de l'Église de Dieu, qu'il s'est acquise par son propre sang. »`;
     const contenu = mesFiches.length ?
 `Bonjour ${ev.nom},
 
 Belle semaine à vous ! 🙏 Voici votre point hebdomadaire de la Commission Témoignage :
 
-📋 Personnes à contacter – Cette semaine :
+📋 Personnes à contacter – Cette semaine : (Programmer la visite mensuel ⚠️)
+
 ${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
+
+📊 Bilan de la semaine passée :
 
 ${bilanSemainePassee}
 
-📊 Cette semaine, vous avez déjà fait ${nbVisites} visite(s) et ${nbAppelsMsg} appel(s)/message(s) — merci, chaque geste compte !
-
 Merci de prendre de leurs nouvelles au cours de cette semaine. Que le Seigneur vous accompagne et vous bénisse abondamment !
 
-« ${v.txt} » (${v.ref})
+${versetHebdo}
 
 Fraternellement,
-Commission Témoignage — EEAM Fès
-Église Évangélique au Maroc — Paroisse de Fès` :
+Commission Témoignage — EEAM Fès` :
 `Bonjour ${ev.nom},
 
 Belle semaine à vous ! 🙏 Un petit mot simplement pour vous encourager : prenez des nouvelles de ceux que vous suivez d'ici lundi — même un message rapide fait une vraie différence.
 
-« ${v.txt} » (${v.ref})
+${versetHebdo}
 
 Fraternellement,
-Commission Témoignage — EEAM Fès
-Église Évangélique au Maroc — Paroisse de Fès`;
+Commission Témoignage — EEAM Fès`;
     return { contenu, nbFiches: mesFiches.length };
   }
 
@@ -8815,7 +8814,6 @@ async function checkRappelHebdoContact() {
 
   const mesFiches = (S.myFiches || []).filter(f => !f.deleted);
 
-  const v = versets[0];
   // Récap d'activité sur les 30 derniers jours (visites + appels/messages) — même texte email ("cette semaine")
   const weekAgo = new Date(now.getTime() - 30 * 86400000);
   const actEv = (S.activities || []).filter(a =>
@@ -8836,38 +8834,39 @@ async function checkRappelHebdoContact() {
 
   const bilanSemainePassee = mesFiches.length
     ? (objectifAtteintSemaine
-        ? `✅ Bilan de la semaine passée : objectif atteint ! Vous avez pris des nouvelles de vos ${mesFiches.length} fiche(s) assignée(s). Merci pour votre fidélité !`
-        : `📊 Bilan de la semaine passée : ${nbContacteesSemaine}/${mesFiches.length} fiche(s) contactée(s) — objectif non atteint.${fichesNonContacteesSemaine.length ? `\n⚠️ Encore à contacter :\n${fichesNonContacteesSemaine.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}` : ''}`)
+        ? `Objectif atteint ! Vous avez pris des nouvelles de vos ${mesFiches.length} fiche(s) assignée(s). Merci pour votre fidélité !\n\n${nbVisites} visite(s) et ${nbAppelsMsg} message(s) / appel(s)`
+        : `${nbContacteesSemaine}/${mesFiches.length} fiche(s) contactée(s) — objectif non atteint.${fichesNonContacteesSemaine.length ? `\n⚠️ Encore à contacter :\n${fichesNonContacteesSemaine.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}` : ''}\n\n${nbVisites} visite(s) et ${nbAppelsMsg} message(s) / appel(s)`)
     : '';
+
+  const versetHebdo = `Actes 20:28\n« Prenez garde à vous-mêmes et à tout le troupeau dont l'Esprit Saint vous a confié la responsabilité ; prenez soin de l'Église de Dieu, qu'il s'est acquise par son propre sang. »`;
 
   const contenu = mesFiches.length ?
 `Bonjour ${ev.nom},
 
 Belle semaine à vous ! 🙏 Voici votre point hebdomadaire de la Commission Témoignage :
 
-📋 Personnes à contacter – Cette semaine :
+📋 Personnes à contacter – Cette semaine : (Programmer la visite mensuel ⚠️)
+
 ${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
+
+📊 Bilan de la semaine passée :
 
 ${bilanSemainePassee}
 
-📊 Cette semaine, vous avez déjà fait ${nbVisites} visite(s) et ${nbAppelsMsg} appel(s)/message(s) — merci, chaque geste compte !
-
 Merci de prendre de leurs nouvelles au cours de cette semaine. Que le Seigneur vous accompagne et vous bénisse abondamment !
 
-« ${v.txt} » (${v.ref})
+${versetHebdo}
 
 Fraternellement,
-Commission Témoignage — EEAM Fès
-Église Évangélique au Maroc — Paroisse de Fès` :
+Commission Témoignage — EEAM Fès` :
 `Bonjour ${ev.nom},
 
 Belle semaine à vous ! 🙏 Un petit mot simplement pour vous encourager : prenez des nouvelles de ceux que vous suivez d'ici lundi — même un message rapide fait une vraie différence.
 
-« ${v.txt} » (${v.ref})
+${versetHebdo}
 
 Fraternellement,
-Commission Témoignage — EEAM Fès
-Église Évangélique au Maroc — Paroisse de Fès`;
+Commission Témoignage — EEAM Fès`;
 
   // Mis en file pour CHAQUE évangéliste — email ET notification restent
   // 100% manuels : rien ne part tant que le/la responsable n'a pas cliqué.
