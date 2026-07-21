@@ -2109,6 +2109,31 @@ body .animate, body .spinner, body [class*="anim"] {
 
       </div>
 
+      <div class="card" style="padding:18px;margin-bottom:14px;border:1.5px solid var(--c1);">
+        <div class="chart-title" style="margin-bottom:4px;">🚀 Déclencher un rappel maintenant</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Générez vous-même le rappel hebdomadaire ou le rappel de visite mensuelle, à l'instant ou à une date de votre choix — sans attendre ni dépendre de la prochaine cadence automatique. L'automatique continue de tourner normalement à côté.</div>
+        <div class="edit-field"><label>Type de rappel</label>
+          <select id="comm-hebdo-type" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
+            <option value="hebdo">📅 Rappel hebdomadaire (contacter ses fiches)</option>
+            <option value="visite_mois">🚶 Rappel visite mensuelle accompagnée</option>
+          </select>
+        </div>
+        <div class="edit-field" style="margin-top:10px;"><label>Destinataire</label>
+          <select id="comm-hebdo-dest" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
+            <option value="__tous__">👥 Tous les évangélistes actifs</option>
+          </select>
+        </div>
+        <div class="edit-field" style="margin-top:10px;"><label>Programmer pour plus tard (facultatif)</label>
+          <input type="datetime-local" id="comm-hebdo-programme" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
+          <div style="font-size:11px;color:var(--mu);margin-top:4px;">Laissez vide pour l'ajouter immédiatement à la file. Sinon, il reste caché dans "Programmés" jusqu'à cette date — vous garderez la main pour cliquer "Envoyer" à ce moment-là.</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button class="btn" style="flex:1;" id="comm-hebdo-btn" onclick="declencherRappelManuel('file')">➕ Ajouter à la file d'envoi</button>
+          <button class="btn btn-primary" style="flex:1;" id="comm-hebdo-btn-now" onclick="declencherRappelManuel('maintenant')">📤 Envoyer maintenant</button>
+        </div>
+        <div style="font-size:11px;color:var(--mu);margin-top:6px;">"Envoyer maintenant" part tout de suite (email + notification interne), sans étape de validation. "Ajouter à la file" laisse le message modifiable ci-dessous jusqu'à ce que vous cliquiez sur Envoyer.</div>
+      </div>
+
       <div class="card" style="padding:18px;margin-bottom:14px;background:var(--bg2);">
         <div class="chart-title" style="margin-bottom:4px;">🕐 Prochaines générations automatiques</div>
         <div style="font-size:12px;color:var(--mu);margin-bottom:12px;">Dates précises auxquelles les prochains rappels seront déposés dans la file ci-dessous, pour savoir quand revenir valider les envois.</div>
@@ -6430,6 +6455,7 @@ function _buildCommunicationHTML(titreBadge, contenuTexte) {
    des données fictives. ── */
 function initCommunications() {
   populateCommManuelSelect();
+  populateCommHebdoSelect();
   renderProchainesGenerationsAuto();
   if (!S.unsubCommunications) {
     S.unsubCommunications = window._listenCommunications(list => {
@@ -6828,6 +6854,205 @@ function populateCommManuelSelect() {
   const actifs = (S.evs || []).filter(e => e.actif !== false && e.email);
   sel.innerHTML = '<option value="__tous__">👥 Tous les évangélistes actifs (' + actifs.length + ')</option>'
     + actifs.map(e => `<option value="${e.id}">${_esc(e.nom)}</option>`).join('');
+}
+
+function populateCommHebdoSelect() {
+  const sel = document.getElementById('comm-hebdo-dest');
+  if (!sel) return;
+  const actifs = (S.evs || []).filter(e => e.actif !== false && e.email);
+  sel.innerHTML = '<option value="__tous__">👥 Tous les évangélistes actifs (' + actifs.length + ')</option>'
+    + actifs.map(e => `<option value="${e.id}">${_esc(e.nom)}</option>`).join('');
+}
+
+/* ── Construction du contenu (mêmes textes que les rappels automatiques
+   checkRappelHebdoContact / checkRappelVisiteMensuelle), mais pour un
+   évangéliste choisi librement, sans contrainte de jour ni de dedup. ── */
+function _construireContenuRappelManuel(type, ev) {
+  const mesFiches = (S.fiches || []).filter(f => !f.deleted && f.evangelisteId === ev.id);
+  if (type === 'hebdo') {
+    const now = new Date();
+    const v = versets[0];
+    const weekAgo = new Date(now.getTime() - 7 * 86400000);
+    const actEv = (S.activities || []).filter(a =>
+      a.evangelisteId === ev.id && a.date && new Date(a.date + 'T12:00:00') >= weekAgo
+    );
+    const nbVisites   = actEv.filter(a => a.type === 'visite').length;
+    const nbAppelsMsg = actEv.filter(a => a.type === 'appel' || a.type === 'message').length;
+    const fichesIdsContacteesCetteSemaine = new Set(actEv.map(a => a.ficheId).filter(Boolean));
+    const fichesContacteesSemaine    = mesFiches.filter(f => fichesIdsContacteesCetteSemaine.has(f.id));
+    const fichesNonContacteesSemaine = mesFiches.filter(f => !fichesIdsContacteesCetteSemaine.has(f.id));
+    const nbContacteesSemaine = fichesContacteesSemaine.length;
+    const objectifAtteintSemaine = mesFiches.length > 0 && nbContacteesSemaine === mesFiches.length;
+    const bilanSemainePassee = mesFiches.length
+      ? (objectifAtteintSemaine
+          ? `✅ Bilan de la semaine passée : objectif atteint ! Vous avez pris des nouvelles de vos ${mesFiches.length} fiche(s) assignée(s). Merci pour votre fidélité !`
+          : `📊 Bilan de la semaine passée : ${nbContacteesSemaine}/${mesFiches.length} fiche(s) contactée(s) — objectif non atteint.${fichesNonContacteesSemaine.length ? `\n⚠️ Encore à contacter :\n${fichesNonContacteesSemaine.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}` : ''}`)
+      : '';
+    const contenu = mesFiches.length ?
+`Bonjour ${ev.nom},
+
+Belle semaine à vous ! 🙏 Voici votre point hebdomadaire de la Commission Témoignage :
+
+📋 Personnes à contacter – Cette semaine :
+${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
+
+${bilanSemainePassee}
+
+📊 Cette semaine, vous avez déjà fait ${nbVisites} visite(s) et ${nbAppelsMsg} appel(s)/message(s) — merci, chaque geste compte !
+
+Merci de prendre de leurs nouvelles au cours de cette semaine. Que le Seigneur vous accompagne et vous bénisse abondamment !
+
+« ${v.txt} » (${v.ref})
+
+Fraternellement,
+Commission Témoignage — EEAM Fès
+Église Évangélique au Maroc — Paroisse de Fès` :
+`Bonjour ${ev.nom},
+
+Belle semaine à vous ! 🙏 Un petit mot simplement pour vous encourager : prenez des nouvelles de ceux que vous suivez d'ici lundi — même un message rapide fait une vraie différence.
+
+« ${v.txt} » (${v.ref})
+
+Fraternellement,
+Commission Témoignage — EEAM Fès
+Église Évangélique au Maroc — Paroisse de Fès`;
+    return { contenu, nbFiches: mesFiches.length };
+  }
+
+  // type === 'visite_mois'
+  const now = new Date();
+  const v = versets[1];
+  const collegues = (S.evs || []).filter(e => e.disponible && e.id !== ev.id && e.equipe === ev.equipe);
+  const nomsCollegues = collegues.length
+    ? collegues.map(e => e.nom).join(', ')
+    : 'aucun signalé pour l\'instant — voir avec la responsable de zone';
+  const dateSuggereeLabel = new Date(_dateSuggereeVisiteMois(now) + 'T00:00:00').toLocaleDateString('fr-FR', {day:'numeric', month:'long'});
+  const contenu =
+`Bonjour ${ev.nom},
+
+Un nouveau mois commence — une belle occasion de marcher, à deux, aux côtés de ceux que vous accompagnez ! 🚶🙏
+
+Pensez à programmer une visite accompagnée ce mois-ci (date suggérée : ${dateSuggereeLabel}, libre à vous de l'ajuster) pour vos ${mesFiches.length} fiche(s) :
+${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
+
+👥 Accompagnateur(s) disponible(s) en ce moment : ${nomsCollegues}
+
+👉 Vous pouvez choisir la date et l'accompagnateur directement dans l'onglet Agenda de l'app.
+
+« ${v.txt} » (${v.ref})
+
+Avec joie,
+Commission Témoignage — EEAM Fès`;
+  return { contenu, nbFiches: mesFiches.length };
+}
+
+/* ── Déclenchement manuel des rappels hebdo / visite mensuelle, à la
+   demande de la responsable : mêmes textes que l'automatique, mais pour
+   qui elle veut et quand elle veut (maintenant ou à une date programmée).
+   Clé distincte (manuel_...) pour ne jamais entrer en conflit avec la
+   déduplication de la cadence automatique, qui continue de tourner. ── */
+async function declencherRappelManuel(mode) {
+  const type   = document.getElementById('comm-hebdo-type')?.value;
+  const sel    = document.getElementById('comm-hebdo-dest');
+  const prog   = document.getElementById('comm-hebdo-programme')?.value;
+  const destId = sel?.value;
+  const actifs = (S.evs || []).filter(e => e.actif !== false && e.email);
+  const cibles = destId === '__tous__' ? actifs : actifs.filter(e => e.id === destId);
+  if (!cibles.length) { toast('❌ Aucun destinataire valide (email manquant ?)'); return; }
+
+  const typeLabel = type === 'hebdo' ? 'rappel hebdomadaire' : 'rappel de visite mensuelle';
+  const ts = Date.now();
+
+  if (mode === 'file') {
+    const programmePour = prog ? new Date(prog).toISOString() : null;
+    const btn = document.getElementById('comm-hebdo-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Ajout…'; }
+    try {
+      for (const ev of cibles) {
+        const { contenu, nbFiches } = _construireContenuRappelManuel(type, ev);
+        await window._upsertCommunication(`manuel_${type}_${ts}_${ev.id}`, {
+          type:          type === 'hebdo' ? 'hebdo' : 'visite_mois',
+          evId:          ev.id,
+          evNom:         ev.nom,
+          evEmail:       ev.email,
+          cle:           `manuel_${type}_${ts}`,
+          contenu,
+          nbFiches,
+          programmePour,
+          statut:        'attente',
+          emailEnvoye:   false,
+          notifEnvoyee:  false,
+          pushDemande:   false,
+          createdAt:     firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      toast(programmePour
+        ? `📅 ${typeLabel} programmé pour ${cibles.length} évangéliste(s) — visible dans "Programmés" jusqu'à la date choisie`
+        : `✅ ${typeLabel} ajouté à la file pour ${cibles.length} évangéliste(s)`);
+      document.getElementById('comm-hebdo-programme').value = '';
+    } catch (e) {
+      console.error(e);
+      toast('❌ Erreur ajout à la file');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '➕ Ajouter à la file d\'envoi'; }
+    }
+    return;
+  }
+
+  // mode === 'maintenant'
+  if (!confirm(`Envoyer le ${typeLabel} immédiatement à ${cibles.length} évangéliste(s) ? Le message part tout de suite, sans passer par la file d'attente.`)) return;
+  const btnNow = document.getElementById('comm-hebdo-btn-now');
+  if (btnNow) { btnNow.disabled = true; btnNow.textContent = '⏳ Envoi…'; }
+  let okCount = 0, errCount = 0;
+  for (const ev of cibles) {
+    const id = `manuel_${type}_${ts}_${ev.id}`;
+    try {
+      const { contenu, nbFiches } = _construireContenuRappelManuel(type, ev);
+      const badge = type === 'hebdo' ? '📅 Rappel hebdomadaire' : '🚶 Rappel visite mensuelle';
+      await window._upsertCommunication(id, {
+        type:          type === 'hebdo' ? 'hebdo' : 'visite_mois',
+        evId:          ev.id,
+        evNom:         ev.nom,
+        evEmail:       ev.email,
+        cle:           `manuel_${type}_${ts}`,
+        contenu,
+        nbFiches,
+        programmePour: null,
+        statut:        'attente',
+        emailEnvoye:   false,
+        notifEnvoyee:  false,
+        pushDemande:   false,
+        createdAt:     firebase.firestore.FieldValue.serverTimestamp()
+      });
+      if (ev.email) {
+        const htmlMsg = _buildCommunicationHTML(badge, contenu);
+        await _ejsSend(_EJS.service, _EJS.templateRapport, {
+          to_email:        ev.email,
+          action:          htmlMsg,
+          ficheNom:        `${badge} — ${ev.nom || ''}`,
+          evNom:           'Commission Témoignage — Paroisse de Fès',
+          prochaineAction: contenu,
+          email:           ev.email
+        }, 'rappel-manuel-immediat');
+      }
+      await window._pushNotif(ev.id, `${badge} — voir l'app pour le détail.`, type === 'hebdo' ? 'hebdo' : 'visite_mois');
+      await window._envoyerCommunication(id, {
+        emailEnvoye:   !!ev.email,
+        notifEnvoyee:  true,
+        pushDemande:   true,
+        pushDemandeAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      okCount++;
+    } catch (e) {
+      console.error(e);
+      errCount++;
+    }
+  }
+  toast(errCount
+    ? `⚠️ Envoyé à ${okCount}, échec pour ${errCount} — vérifiez la console`
+    : `✅ ${typeLabel} envoyé immédiatement à ${okCount} évangéliste(s) (email + notification)`);
+  document.getElementById('comm-hebdo-programme').value = '';
+  if (btnNow) { btnNow.disabled = false; btnNow.textContent = '📤 Envoyer maintenant'; }
 }
 
 async function envoyerCommunicationManuelle() {
