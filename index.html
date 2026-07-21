@@ -6872,7 +6872,7 @@ function _construireContenuRappelManuel(type, ev) {
   if (type === 'hebdo') {
     const now = new Date();
     const v = versets[0];
-    const weekAgo = new Date(now.getTime() - 7 * 86400000);
+    const weekAgo = new Date(now.getTime() - 30 * 86400000);
     const actEv = (S.activities || []).filter(a =>
       a.evangelisteId === ev.id && a.date && new Date(a.date + 'T12:00:00') >= weekAgo
     );
@@ -8816,8 +8816,8 @@ async function checkRappelHebdoContact() {
   const mesFiches = (S.myFiches || []).filter(f => !f.deleted);
 
   const v = versets[0];
-  // Récap d'activité sur la semaine écoulée (visites + appels/messages)
-  const weekAgo = new Date(now.getTime() - 7 * 86400000);
+  // Récap d'activité sur les 30 derniers jours (visites + appels/messages) — même texte email ("cette semaine")
+  const weekAgo = new Date(now.getTime() - 30 * 86400000);
   const actEv = (S.activities || []).filter(a =>
     a.evangelisteId === S.evId && a.date && new Date(a.date + 'T12:00:00') >= weekAgo
   );
