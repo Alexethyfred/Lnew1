@@ -4014,7 +4014,7 @@ function afficherContactGroupeCourant() {
   const f = _envoiGroupeQueue[_envoiGroupeIndex];
   const total = _envoiGroupeQueue.length;
   const texte = _envoiGroupeTexte.replace(/\{prenom\}/gi, f.prenom || f.nom || '');
-  const telRaw  = (f.telephone || '').trim();
+  const telRaw  = (f.telephone || '').replace(/\s/g, '');
   const telIntl = telRaw.startsWith('+') ? telRaw : (telRaw ? '+212' + telRaw.replace(/^0/, '') : '');
   const telFinal = telIntl.replace(/^\+/, '');
 
@@ -8599,28 +8599,50 @@ async function checkRappelHebdoContact() {
   const nbVisites   = actEv.filter(a => a.type === 'visite').length;
   const nbAppelsMsg = actEv.filter(a => a.type === 'appel' || a.type === 'message').length;
 
+  // ── BILAN DE LA SEMAINE PASSÉE : parmi les fiches assignées, lesquelles
+  // ont réellement été contactées (au moins une activité liée) cette semaine ?
+  // Permet d'évaluer si l'objectif (toutes les fiches assignées contactées)
+  // a été atteint.
+  const fichesIdsContacteesCetteSemaine = new Set(actEv.map(a => a.ficheId).filter(Boolean));
+  const fichesContacteesSemaine    = mesFiches.filter(f => fichesIdsContacteesCetteSemaine.has(f.id));
+  const fichesNonContacteesSemaine = mesFiches.filter(f => !fichesIdsContacteesCetteSemaine.has(f.id));
+  const nbContacteesSemaine = fichesContacteesSemaine.length;
+  const objectifAtteintSemaine = mesFiches.length > 0 && nbContacteesSemaine === mesFiches.length;
+
+  const bilanSemainePassee = mesFiches.length
+    ? (objectifAtteintSemaine
+        ? `✅ Bilan de la semaine passée : objectif atteint ! Vous avez pris des nouvelles de vos ${mesFiches.length} fiche(s) assignée(s). Merci pour votre fidélité !`
+        : `📊 Bilan de la semaine passée : ${nbContacteesSemaine}/${mesFiches.length} fiche(s) contactée(s) — objectif non atteint.${fichesNonContacteesSemaine.length ? `\n⚠️ Encore à contacter :\n${fichesNonContacteesSemaine.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}` : ''}`)
+    : '';
+
   const contenu = mesFiches.length ?
 `Bonjour ${ev.nom},
 
-Belle semaine à vous ! 🙏 On pense à vous et à ce que Dieu fait à travers votre fidélité.
+Belle semaine à vous ! 🙏 Voici votre point hebdomadaire de la Commission Témoignage :
 
-📋 D'ici lundi, pensez à prendre des nouvelles de ${mesFiches.length} personne(s) :
+📋 Personnes à contacter – Cette semaine :
 ${mesFiches.map(f => `• ${f.nom} ${f.prenom}`).join('\n')}
+
+${bilanSemainePassee}
 
 📊 Cette semaine, vous avez déjà fait ${nbVisites} visite(s) et ${nbAppelsMsg} appel(s)/message(s) — merci, chaque geste compte !
 
+Merci de prendre de leurs nouvelles au cours de cette semaine. Que le Seigneur vous accompagne et vous bénisse abondamment !
+
 « ${v.txt} » (${v.ref})
 
-Avec gratitude,
-Commission Témoignage — EEAM Fès` :
+Fraternellement,
+Commission Témoignage — EEAM Fès
+Église Évangélique au Maroc — Paroisse de Fès` :
 `Bonjour ${ev.nom},
 
 Belle semaine à vous ! 🙏 Un petit mot simplement pour vous encourager : prenez des nouvelles de ceux que vous suivez d'ici lundi — même un message rapide fait une vraie différence.
 
 « ${v.txt} » (${v.ref})
 
-Avec gratitude,
-Commission Témoignage — EEAM Fès`;
+Fraternellement,
+Commission Témoignage — EEAM Fès
+Église Évangélique au Maroc — Paroisse de Fès`;
 
   // Mis en file pour CHAQUE évangéliste — email ET notification restent
   // 100% manuels : rien ne part tant que le/la responsable n'a pas cliqué.
