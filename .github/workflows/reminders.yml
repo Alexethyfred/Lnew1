@@ -50,4 +50,4 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           VAPID_PUBLIC_KEY:              ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY:             ${{ secrets.VAPID_PRIVATE_KEY }}
-        run: node send-reminders.js
+        run: node automation/send-reminders.js
