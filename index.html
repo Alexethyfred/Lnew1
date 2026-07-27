@@ -1418,6 +1418,20 @@ body .animate, body .spinner, body [class*="anim"] {
 .equipe-ville   { background:rgba(26,122,58,0.12);color:var(--ok); }
 .equipe-autre   { background:rgba(100,100,100,0.12);color:#555; }
 
+/* ── Cartes Quartier (onglet Équipes) ──────────────────────
+   3 informations : nom du quartier (dominant), évangéliste
+   responsable, nombre de fiches. ─────────────────────────── */
+.qz-card { background:var(--surface);border:1.5px solid var(--bo);border-radius:14px;padding:14px 16px;transition:border-color .15s; }
+.qz-card.qz-warn { border-color:rgba(192,57,43,0.35);background:rgba(192,57,43,0.03); }
+.qz-head { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:5px; }
+.qz-name { font-size:16px;font-weight:800;letter-spacing:-.01em;color:var(--c1);display:flex;align-items:center;gap:7px;min-width:0; }
+.qz-name span.txt { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.qz-count { flex-shrink:0;font-size:11.5px;font-weight:800;color:#fff;background:var(--c1);padding:3px 11px;border-radius:20px;white-space:nowrap; }
+.qz-ev { font-size:12px;font-weight:600;color:var(--mu);display:flex;align-items:center;gap:5px;margin-bottom:11px; }
+.qz-ev.qz-unassigned { color:#C0392B;font-weight:700; }
+.qz-fiches { display:flex;flex-direction:column;gap:7px; }
+.qz-toggle { margin-top:2px;background:none;border:none;color:var(--c1);font-size:11px;font-weight:700;cursor:pointer;padding:2px 0; }
+
 .btn-icon { background:none; border:none; cursor:pointer; font-size:15px; padding:4px 6px; border-radius:6px; opacity:.7; }
 .btn-icon:hover { opacity:1; background:var(--bg2); }
 .btn-mic { position:absolute; right:8px; bottom:8px; width:30px; height:30px; border-radius:50%; border:1.5px solid var(--bo); background:var(--surface); cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; transition:all .15s; }
@@ -1436,7 +1450,7 @@ body .animate, body .spinner, body [class*="anim"] {
   <div class="lang-bar">
     <div class="lang-bar-btns" style="position:relative;">
       <button class="lb on" id="lang-toggle-btn" onclick="toggleLangDropdown(event)" style="display:flex;align-items:center;gap:6px;">
-        🌐 <span id="lang-current-label">Langues</span> <span style="font-size:9px;opacity:.7;">▼</span>
+        <span id="lang-current-label">Langues</span> <span style="font-size:9px;opacity:.7;">▼</span>
       </button>
       <div id="lang-dropdown" style="display:none;position:absolute;top:calc(100% + 8px);left:0;background:var(--surface);border:1px solid var(--bo);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.18);z-index:1000;min-width:160px;overflow:hidden;">
         <button class="lang-opt on" id="lang-btn-fr" onclick="setLang(event,'fr')" style="width:100%;text-align:left;padding:10px 16px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--tx);cursor:pointer;display:flex;align-items:center;gap:8px;">🇫🇷 Français</button>
@@ -1444,6 +1458,7 @@ body .animate, body .spinner, body [class*="anim"] {
         <button class="lang-opt" id="lang-btn-es" onclick="setLang(event,'es')" style="width:100%;text-align:left;padding:10px 16px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--tx);cursor:pointer;display:flex;align-items:center;gap:8px;">🇪🇸 Español</button>
         <button class="lang-opt" id="lang-btn-pt" onclick="setLang(event,'pt')" style="width:100%;text-align:left;padding:10px 16px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--tx);cursor:pointer;display:flex;align-items:center;gap:8px;">🇧🇷 Português</button>
         <button class="lang-opt" id="lang-btn-ar" onclick="setLang(event,'ar')" style="width:100%;text-align:left;padding:10px 16px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--tx);cursor:pointer;display:flex;align-items:center;gap:8px;">🇲🇦 العربية</button>
+        <button class="lang-opt" id="lang-btn-de" onclick="setLang(event,'de')" style="width:100%;text-align:left;padding:10px 16px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--tx);cursor:pointer;display:flex;align-items:center;gap:8px;">🇩🇪 Deutsch</button>
 
       </div>
     </div>
@@ -2003,42 +2018,49 @@ body .animate, body .spinner, body [class*="anim"] {
         </div>
       </div>
 
-      <!-- BLOC RAPPELS EMAIL (responsable) — accordion déroulant -->
-      <div style="margin-top:24px;">
-        <div onclick="toggleRespRappels(this)"
-             style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;flex-wrap:wrap;gap:8px;cursor:pointer;padding:12px 16px;background:var(--bg2);border:1.5px solid var(--bo);border-radius:12px;user-select:none;"
-             id="resp-rappels-header">
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--mu);display:flex;align-items:center;gap:8px;">
-            <span style="width:3px;height:14px;background:var(--c2);border-radius:2px;display:inline-block;flex-shrink:0;"></span>
-            📧 Rappels email planifiés
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <button class="tbtn-period" onclick="event.stopPropagation();renderRespRappels()" style="font-size:11px;">🔄 Actualiser</button>
-            <span id="resp-rappels-arrow" style="font-size:13px;color:var(--mu);transition:transform .25s;display:inline-block;">▶</span>
-          </div>
-        </div>
-        <div id="resp-rappels-body" style="display:none;margin-top:10px;">
-          <div id="resp-rappels-list">
-            <div class="empty-state"><div class="ico">🔔</div><p>Cliquez sur Actualiser pour charger…</p></div>
-          </div>
-        </div>
-      </div>
-
     </div>
 
     <!-- TAB ÉQUIPES PAR QUARTIER -->
     <div class="tabcontent" id="tab-equipes">
+
+      <!-- Bandeau utile : quartiers sans évangéliste attribué -->
+      <div id="equipes-alert-bar" style="margin-bottom:14px;"></div>
+
       <div class="card" style="padding:16px;margin-bottom:14px;">
-        <div class="chart-title" style="margin-bottom:4px;">Répartition par équipe &amp; quartier</div>
-        <p style="font-size:12px;color:var(--mu);margin-bottom:14px;">Les équipes sont constituées automatiquement à partir des quartiers enregistrés dans les fiches visiteurs.</p>
-        <div id="equipes-vue" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="chart-title" style="margin-bottom:2px;">🆕 Nouvelles fiches</div>
+        <p style="font-size:12px;color:var(--mu);margin-bottom:14px;">Fiches pas encore confiées à un évangéliste, par quartier.</p>
+        <div id="equipes-nouvelles" style="display:flex;flex-direction:column;gap:12px;">
           <div class="empty-state"><div class="ico">⏳</div><p>Chargement…</p></div>
         </div>
       </div>
-      <div class="card" style="padding:16px;">
-        <div class="chart-title" style="margin-bottom:10px;">Quartiers non attribués</div>
-        <div id="equipes-non-attrib">
-          <div class="empty-state"><div class="ico">📍</div><p>Aucun quartier sans équipe</p></div>
+
+      <div class="card" style="padding:16px;margin-bottom:14px;">
+        <div class="chart-title" style="margin-bottom:2px;">📋 Fiches confiées</div>
+        <p style="font-size:12px;color:var(--mu);margin-bottom:14px;">Fiches déjà attribuées à un évangéliste, par quartier.</p>
+        <div id="equipes-confiees" style="display:flex;flex-direction:column;gap:12px;">
+          <div class="empty-state"><div class="ico">⏳</div><p>Chargement…</p></div>
+        </div>
+      </div>
+
+      <!-- Gestion des zones/évangélistes par quartier — conservée pour pouvoir
+           associer un évangéliste responsable à un quartier (utilisée pour
+           afficher le nom de l'évangéliste sur les cartes ci-dessus). -->
+      <div style="background:var(--surface);border:1.5px solid var(--bo);border-radius:14px;overflow:hidden;">
+        <div style="padding:12px 16px;background:var(--bg2);border-bottom:1px solid var(--bo);display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--c1);">⚙️ Évangéliste responsable par quartier</div>
+          <button onclick="toggleZonesManager()" id="zones-manager-toggle" style="background:none;border:none;font-size:12px;color:var(--mu);cursor:pointer;font-weight:600;">Gérer ▾</button>
+        </div>
+        <div id="zones-manager-body" style="display:none;padding:14px;">
+          <div style="font-size:12px;color:var(--mu);margin-bottom:10px;">Associez à chaque équipe les quartiers qu'elle couvre. Un évangéliste est ensuite rattaché à une équipe dans sa fiche.</div>
+          <div id="zones-list-manage" style="margin-bottom:12px;"></div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mu);margin-bottom:6px;">Nouvelle équipe</div>
+          <div style="display:flex;gap:8px;margin-bottom:6px;">
+            <input type="text" id="new-zone-nom" placeholder="Nom de l'équipe (ex: Agdal)" style="flex:1;background:var(--bg2);border:1.5px solid var(--bo);border-radius:8px;padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
+            <input type="text" id="new-zone-icon" placeholder="🏘️" style="width:52px;background:var(--bg2);border:1.5px solid var(--bo);border-radius:8px;padding:8px 10px;font-size:16px;text-align:center;outline:none;">
+            <button onclick="addZone()" class="btn btn-primary btn-sm">+ Ajouter</button>
+          </div>
+          <input type="text" id="new-zone-quartiers" placeholder="Quartiers couverts (ex: Uvillage, Sebaa Rouadi, Atlas…)" style="width:100%;background:var(--bg2);border:1.5px solid var(--bo);border-radius:8px;padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
+          <div style="font-size:10px;color:var(--mu);margin-top:3px;">Séparation par virgule, insensible aux majuscules/accents et aux petites variantes d'écriture.</div>
         </div>
       </div>
     </div>
@@ -2083,9 +2105,16 @@ body .animate, body .spinner, body [class*="anim"] {
 
     <!-- TAB COMMUNICATIONS -->
     <div class="tabcontent" id="tab-communications">
-      <div class="card" style="padding:18px;margin-bottom:14px;border:1.5px solid var(--c1);">
-        <div class="chart-title" style="margin-bottom:4px;">✍️ Nouveau message manuel</div>
-        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Envoyez ce que vous voulez, à qui vous voulez, aussi souvent que nécessaire, sans attendre un rappel automatique.</div>
+
+      <!-- GROUPE : COMPOSER -->
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--c1);margin-bottom:10px;">
+        <span style="width:3px;height:14px;background:var(--c2);border-radius:2px;display:inline-block;vertical-align:middle;margin-right:6px;"></span>
+        Composer
+      </div>
+
+      <div class="card" style="padding:18px;margin-bottom:14px;">
+        <div class="chart-title" style="margin-bottom:4px;">Nouveau message manuel</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Un message libre, à qui vous voulez, quand vous voulez.</div>
         <div class="edit-field"><label>Destinataire</label>
           <select id="comm-manuel-dest" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
             <option value="__tous__">👥 Tous les évangélistes actifs</option>
@@ -2099,19 +2128,18 @@ body .animate, body .spinner, body [class*="anim"] {
         </div>
         <div class="edit-field" style="margin-top:10px;"><label>Programmer l'envoi pour plus tard (facultatif)</label>
           <input type="datetime-local" id="comm-manuel-programme" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
-          <div style="font-size:11px;color:var(--mu);margin-top:4px;">Laissez vide pour l'ajouter immédiatement à la file. Sinon, le message reste caché dans un onglet "Programmés" jusqu'à cette date — vous garderez toujours la main pour cliquer "Envoyer" à ce moment-là.</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:4px;">Laissez vide pour l'ajouter tout de suite à la file.</div>
         </div>
         <div style="display:flex;gap:8px;margin-top:12px;">
-          <button class="btn" style="flex:1;" id="comm-manuel-btn" onclick="envoyerCommunicationManuelle()">➕ Ajouter à la file d'envoi</button>
+          <button class="btn" style="flex:1;" id="comm-manuel-btn" onclick="envoyerCommunicationManuelle()">➕ Ajouter à la file</button>
           <button class="btn btn-primary" style="flex:1;" id="comm-manuel-btn-now" onclick="envoyerCommunicationManuelleMaintenant()">📤 Envoyer maintenant</button>
         </div>
-        <div style="font-size:11px;color:var(--mu);margin-top:6px;">"Envoyer maintenant" part tout de suite (email + notification interne), sans étape de validation. "Ajouter à la file" garde l'ancien fonctionnement : le message reste modifiable dans la file d'attente ci-dessous jusqu'à ce que vous cliquiez sur Envoyer.</div>
-
+        <div style="font-size:11px;color:var(--mu);margin-top:6px;">« Ajouter à la file » reste modifiable ci-dessous avant envoi. « Envoyer maintenant » part sans validation.</div>
       </div>
 
-      <div class="card" style="padding:18px;margin-bottom:14px;border:1.5px solid var(--c1);">
-        <div class="chart-title" style="margin-bottom:4px;">🚀 Déclencher un rappel maintenant</div>
-        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Générez vous-même le rappel hebdomadaire ou le rappel de visite mensuelle, à l'instant ou à une date de votre choix — sans attendre ni dépendre de la prochaine cadence automatique. L'automatique continue de tourner normalement à côté.</div>
+      <div class="card" style="padding:18px;margin-bottom:14px;">
+        <div class="chart-title" style="margin-bottom:4px;">Déclencher un rappel maintenant</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Générez le rappel hebdomadaire ou de visite mensuelle sans attendre la cadence automatique, qui continue de tourner normalement à côté.</div>
         <div class="edit-field"><label>Type de rappel</label>
           <select id="comm-hebdo-type" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
             <option value="hebdo">📅 Rappel hebdomadaire (contacter ses fiches)</option>
@@ -2125,32 +2153,59 @@ body .animate, body .spinner, body [class*="anim"] {
         </div>
         <div class="edit-field" style="margin-top:10px;"><label>Programmer pour plus tard (facultatif)</label>
           <input type="datetime-local" id="comm-hebdo-programme" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;color:var(--tx);">
-          <div style="font-size:11px;color:var(--mu);margin-top:4px;">Laissez vide pour l'ajouter immédiatement à la file. Sinon, il reste caché dans "Programmés" jusqu'à cette date — vous garderez la main pour cliquer "Envoyer" à ce moment-là.</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:4px;">Laissez vide pour l'ajouter tout de suite à la file.</div>
         </div>
         <div style="display:flex;gap:8px;margin-top:12px;">
-          <button class="btn" style="flex:1;" id="comm-hebdo-btn" onclick="declencherRappelManuel('file')">➕ Ajouter à la file d'envoi</button>
+          <button class="btn" style="flex:1;" id="comm-hebdo-btn" onclick="declencherRappelManuel('file')">➕ Ajouter à la file</button>
           <button class="btn btn-primary" style="flex:1;" id="comm-hebdo-btn-now" onclick="declencherRappelManuel('maintenant')">📤 Envoyer maintenant</button>
         </div>
-        <div style="font-size:11px;color:var(--mu);margin-top:6px;">"Envoyer maintenant" part tout de suite (email + notification interne), sans étape de validation. "Ajouter à la file" laisse le message modifiable ci-dessous jusqu'à ce que vous cliquiez sur Envoyer.</div>
+        <div style="font-size:11px;color:var(--mu);margin-top:6px;">« Ajouter à la file » reste modifiable ci-dessous avant envoi. « Envoyer maintenant » part sans validation.</div>
       </div>
 
-      <div class="card" style="padding:18px;margin-bottom:14px;background:var(--bg2);">
-        <div class="chart-title" style="margin-bottom:4px;">🕐 Prochaines générations automatiques</div>
-        <div style="font-size:12px;color:var(--mu);margin-bottom:12px;">Dates précises auxquelles les prochains rappels seront déposés dans la file ci-dessous, pour savoir quand revenir valider les envois.</div>
+      <!-- GROUPE : SUIVI DES ENVOIS -->
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--c1);margin:22px 0 10px;">
+        <span style="width:3px;height:14px;background:var(--c2);border-radius:2px;display:inline-block;vertical-align:middle;margin-right:6px;"></span>
+        Suivi des envois
+      </div>
+
+      <div class="card" style="padding:18px;margin-bottom:14px;">
+        <div class="chart-title" style="margin-bottom:4px;">Prochaines générations automatiques</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:12px;">Dates des prochains rappels déposés dans la file ci-dessous.</div>
         <div id="comm-prochaines-dates">
           <div class="empty-state"><div class="ico">⏳</div><p>Calcul…</p></div>
         </div>
       </div>
 
       <div class="card" style="padding:18px;margin-bottom:14px;">
-        <div class="chart-title" style="margin-bottom:4px;">📬 File d'envoi — en attente de validation</div>
-        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Ces rappels (hebdo, visite mensuelle) sont générés automatiquement mais ne partent qu'après votre validation. Vous pouvez modifier le contenu avant l'envoi.</div>
+        <div class="chart-title" style="margin-bottom:4px;">File d'envoi — en attente de validation</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">Rappels générés automatiquement (hebdo, visite mensuelle), à valider avant envoi. Contenu modifiable.</div>
         <div id="comm-queue-list">
           <div class="empty-state"><div class="ico">⏳</div><p>Chargement…</p></div>
         </div>
       </div>
+
+      <!-- Rappels email par fiche (48h avant chaque action planifiée) —
+           accordion, distinct de la file ci-dessus : envoi automatique
+           direct, rien à valider ; consultation et renvoi/suppression. -->
+      <div class="card" style="padding:0;margin-bottom:14px;overflow:hidden;">
+        <div onclick="toggleRespRappels(this)"
+             style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;padding:18px;user-select:none;"
+             id="resp-rappels-header">
+          <div>
+            <div class="chart-title" style="margin-bottom:2px;">Rappels email par fiche</div>
+            <div style="font-size:12px;color:var(--mu);">Envoi automatique 48h avant chaque action planifiée — rien à valider.</div>
+          </div>
+          <span id="resp-rappels-arrow" style="font-size:13px;color:var(--mu);transition:transform .25s;display:inline-block;flex-shrink:0;">▶</span>
+        </div>
+        <div id="resp-rappels-body" style="display:none;padding:0 18px 18px;">
+          <div id="resp-rappels-list">
+            <div class="empty-state"><div class="ico">🔔</div><p>Chargement…</p></div>
+          </div>
+        </div>
+      </div>
+
       <div class="card" style="padding:18px;">
-        <div class="chart-title" style="margin-bottom:10px;">📁 Historique des communications envoyées</div>
+        <div class="chart-title" style="margin-bottom:10px;">Historique des communications envoyées</div>
         <div id="comm-historique-list">
           <div class="empty-state"><div class="ico">📭</div><p>Aucun historique</p></div>
         </div>
@@ -2780,8 +2835,16 @@ async function activerPushNotif(silencieux) {
 
 /* ── SAUVEGARDE FICHE ────────────────────────────── */
 window._addFiche = (data) => {
+  // Normalisation silencieuse du quartier : si des fiches sont déjà chargées en
+  // mémoire (session responsable/évangéliste), toute variante proche d'un quartier
+  // déjà connu (faute de frappe, accents, ordre des mots) est fusionnée avec lui.
+  // Transparent pour l'utilisateur — aucun message affiché.
+  const quartierNormalise = (S.fiches && S.fiches.length && data.quartier)
+    ? canonicalQuartier(data.quartier, buildQuartierIndex(S.fiches))
+    : data.quartier;
   return db.collection('fiches').add({
     ...data,
+    quartier:        quartierNormalise,
     statut:          'nouveau',
     evangelisteId:   null,
     evangelisteNom:  null,
@@ -3396,6 +3459,18 @@ const LANGS = {
     lrai:'Motivo de llegada',ret:'Estudios',rtr:'Trabajo',ren:'Emprendimiento',rau:'Otro',lec:'Escuela / Universidad',lrai2:'Especifique',
     sbtn:'Guardar ficha',stit:'¡Gracias!',ssub:'Su ficha ha sido registrada.<br>Bienvenido/a entre nosotros 🙏',
     ph:{nom:'Apellido(s)',prenom:'Nombre(s)',nat:'ej: Marfileña',tel:'+212 6xx xxx xxx',qrt:'Su barrio',srv2:'ej: Coro, Enseñanza...',dur2:'ej: 6 meses...',ec:'Nombre del centro',rai2:'Su motivo...'}
+  },
+
+  de:{
+    cn:'Evangelische Kirche in Marokko', cs:'Pfarrei Fès',
+    cw:"Die Evangelische Kirche in Marokko, Pfarrei Fès, heißt Sie herzlich willkommen.<br>Um Ihnen besser zu dienen und Sie in Ihrem geistlichen Wachstum zu begleiten, füllen Sie bitte dieses Formular aus.",
+    si:'Identität',ss:'Geistlicher Werdegang',se:'Aufenthalt in Marokko',
+    lnom:'Nachname(n)',lpren:'Vorname(n)',lsexe:'Geschlecht',lnat:'Staatsangehörigkeit',ltel:'Telefon',lqrt:'Stadtviertel',
+    lbap:'Sind Sie bereits getauft?',by:'Ja',bn:'Nein',lsrv:'Dienen Sie bereits in einer Abteilung?',lsrv2:'Welche?',
+    ldur:'Geplante Dauer',d3:'3 Jahre',d5:'5 Jahre',da:'Andere',ldur2:'Bitte angeben',
+    lrai:'Grund des Kommens',ret:'Studium',rtr:'Arbeit',ren:'Unternehmertum',rau:'Andere',lec:'Schule / Universität',lrai2:'Bitte angeben',
+    sbtn:'Formular speichern',stit:'Danke!',ssub:'Ihr Formular wurde erfolgreich gespeichert.<br>Willkommen bei uns 🙏',
+    ph:{nom:'Nachname(n)',prenom:'Vorname(n)',nat:'z.B. Ivorisch',tel:'+212 6xx xxx xxx',qrt:'Ihr Stadtviertel',srv2:'z.B. Chor, Unterricht...',dur2:'z.B. 6 Monate...',ec:'Name der Einrichtung',rai2:'Ihr Grund...'}
   }
 };
 
@@ -3404,10 +3479,10 @@ function setLang(e, l) {
   document.documentElement.lang = l;
   document.body.style.direction = l === 'ar' ? 'rtl' : 'ltr';
   // Synchroniser les boutons langue et label
-  const langLabels = {fr:'🇫🇷 Français',en:'🇬🇧 English',es:'🇪🇸 Español',pt:'🇧🇷 Português',ar:'🇲🇦 العربية'};
+  const langLabels = {fr:'🇫🇷 Français',en:'🇬🇧 English',es:'🇪🇸 Español',pt:'🇧🇷 Português',ar:'🇲🇦 العربية',de:'🇩🇪 Deutsch'};
   const currentLabel = document.getElementById('lang-current-label');
   if (currentLabel) currentLabel.textContent = langLabels[l] || 'Langues';
-  ['fr','en','es','pt','ar'].forEach(code => {
+  ['fr','en','es','pt','ar','de'].forEach(code => {
     const btn = document.getElementById('lang-btn-' + code);
     if (btn) {
       btn.style.background = code === l ? 'var(--c5)' : '';
@@ -4364,6 +4439,40 @@ function openFicheModal(id) {
        </div>`
     : '<div style="font-size:12px;color:var(--mu);margin-top:4px;font-style:italic">Aucune action planifiée</div>';
 
+  // Demandes de modification envoyées par les évangélistes
+  const statutLabelsDM = { nouveau:'Nouveau', ancien:'Ancien', commission:'En commission', perdu_de_vue:'Perdu de vue', depart_definitif:'Départ définitif' };
+  const demandesModifAll = (f.demandesModif || []).slice().sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+  const demandesPending  = demandesModifAll.filter(d => d.statut === 'en_attente');
+  const demandesTraitees = demandesModifAll.filter(d => d.statut !== 'en_attente');
+  const demandeModifItemHtml = (d, actionable) => {
+    const detail = d.statutPropose
+      ? `<div style="font-size:13px;color:var(--tx);margin-top:3px;">Nouveau statut proposé : <strong>${statutLabelsDM[d.statutPropose]||d.statutPropose}</strong>${d.statutPrecisionPropose?' — '+crEscapeHtml(d.statutPrecisionPropose):''}</div>`
+      : '';
+    const msg = d.message ? `<div style="font-size:13px;color:var(--tx);margin-top:3px;">${crEscapeHtml(d.message)}</div>` : '';
+    const statusBadge = d.statut === 'validee'
+      ? '<span class="acc-header-badge ok">Validée</span>'
+      : d.statut === 'refusee'
+      ? '<span class="acc-header-badge" style="background:rgba(192,57,43,0.10);color:var(--c3);">Refusée</span>'
+      : '<span class="acc-header-badge warn">En attente</span>';
+    return `<div style="border-bottom:1px solid var(--bo);padding:9px 0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="font-size:12px;font-weight:600;color:var(--tx);">${d.evangelisteNom||'Évangéliste'}<span style="font-weight:400;color:var(--mu);"> · ${d.date ? new Date(d.date).toLocaleDateString('fr-FR') : '—'}</span></span>
+          ${statusBadge}
+        </div>
+        ${detail}${msg}
+        ${actionable
+          ? `<div style="display:flex;gap:8px;margin-top:8px;">
+               <button class="btn btn-primary btn-sm" onclick="validerDemandeModif('${f.id}','${d.id}')">Valider</button>
+               <button class="btn btn-outline btn-sm" onclick="refuserDemandeModif('${f.id}','${d.id}')">Refuser</button>
+             </div>`
+          : (d.traitePar ? `<div style="font-size:11px;color:var(--mu);margin-top:4px;">Traitée par ${d.traitePar}</div>` : '')}
+      </div>`;
+  };
+  const demandesModifRespHtml =
+    (demandesPending.length ? demandesPending.map(d => demandeModifItemHtml(d, true)).join('') : '<p style="font-size:13px;color:var(--mu);font-style:italic;">Aucune demande en attente.</p>')
+    + (demandesTraitees.length ? `<div style="margin-top:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);">Historique</div>${demandesTraitees.slice(0,10).map(d => demandeModifItemHtml(d, false)).join('')}` : '');
+  const demandesPendingCount = demandesPending.length;
+
   document.getElementById('modal-fiche-body').innerHTML = `
     <!-- Tabs dans la modal -->
     <div class="modal-tabs">
@@ -4493,36 +4602,23 @@ function openFicheModal(id) {
         </div>
       </div>
 
-      <!-- SECTION 3 : Prochaine action -->
+      <!-- SECTION 3 : Demandes de modification (évangéliste) -->
       <div class="acc-section">
         <div class="acc-header" onclick="toggleAcc(this)">
           <div class="acc-header-left">
-            <span class="acc-header-icon">📅</span>
+            <span class="acc-header-icon">✎</span>
             <div>
-              <div class="acc-header-title">Prochaine action</div>
-              <div class="acc-header-sub">${f.nextAction ? '⚡ ' + f.nextAction + (f.nextActionDate ? ' · ' + f.nextActionDate : '') : 'Aucune action planifiée'}</div>
+              <div class="acc-header-title">Demandes de modification</div>
+              <div class="acc-header-sub">${demandesPendingCount ? demandesPendingCount + ' en attente' : 'Aucune demande en attente'}</div>
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
-            ${f.nextAction
-              ? `<span class="acc-header-badge${f.nextActionDate && f.nextActionDate < new Date().toISOString().split('T')[0] ? ' warn' : ' ok'}">
-                  ${f.nextActionDate && f.nextActionDate < new Date().toISOString().split('T')[0] ? '⚠️ En retard' : '✓ Planifiée'}
-                </span>`
-              : ''}
+            ${demandesPendingCount ? `<span class="acc-header-badge warn">${demandesPendingCount} en attente</span>` : ''}
             <span class="acc-arrow">▶</span>
           </div>
         </div>
         <div class="acc-body">
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <input type="text" id="na-txt" value="${f.nextAction||''}" placeholder="ex: Appeler, Inviter au culte..."
-              style="background:var(--bg2);border:1.5px solid var(--bo);border-radius:10px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;color:var(--tx);">
-            <div style="display:flex;gap:8px;">
-              <input type="date" id="na-date" value="${f.nextActionDate||''}"
-                style="flex:1;background:var(--bg2);border:1.5px solid var(--bo);border-radius:10px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;color:var(--tx);">
-              <button class="btn btn-primary btn-sm" onclick="doSaveNextAction()">💾 Sauvegarder</button>
-            </div>
-          </div>
-          ${naHtml}
+          ${demandesModifRespHtml}
         </div>
       </div>
 
@@ -5006,15 +5102,6 @@ async function removeEv(id, nom) {
 let _zonesFirebaseLoaded = false;
 
 const DEFAULT_ZONES = ['Euromed','Sebaa Rouadi','Chaima','Bensouda','Lido','Atlas','Mont Fleuri','Narjiss'];
-
-function toggleFichesSansEvGlobal() {
-  const body = document.getElementById('fiches-sans-ev-body');
-  const arrow = document.getElementById('fiches-sans-ev-arrow');
-  if (!body) return;
-  const isOpen = body.style.display !== 'none';
-  body.style.display = isOpen ? 'none' : 'block';
-  if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
-}
 
 function toggleZonesManager() {
   const body = document.getElementById('zones-manager-body');
@@ -5686,12 +5773,16 @@ async function doEditFiche() {
   // Valeur sécurisée : utilise la valeur du champ si présent, sinon garde la valeur Firebase existante
   const fiche = S.fiches.find(f => f.id === S.curFicheId) || {};
   const getVal = (id, fallback) => { const el = document.getElementById(id); return el ? el.value : (fallback ?? ''); };
+  // Normalisation silencieuse du quartier : fusionne automatiquement toute variante
+  // proche d'un quartier déjà connu (faute de frappe, accents, ordre des mots),
+  // sans jamais afficher de message à l'utilisateur.
+  const _qrtIndex = buildQuartierIndex((S.fiches || []).filter(f => f.id !== S.curFicheId));
   const data = {
     nom:           getVal('ef-nom', fiche.nom).trim().toUpperCase() || '',
     prenom:        getVal('ef-prenom', fiche.prenom).trim() || '',
     telephone:     getVal('ef-tel', fiche.telephone).trim() || '',
     nationalite:   getVal('ef-nat', fiche.nationalite).trim() || '',
-    quartier:      normalizeField(getVal('ef-qrt', fiche.quartier)),
+    quartier:      canonicalQuartier(normalizeField(getVal('ef-qrt', fiche.quartier)), _qrtIndex),
     ecole:         normalizeField(getVal('ef-ec', fiche.ecole)),
     sexe:          getVal('ef-sexe', fiche.sexe) || '',
     baptise:       getVal('ef-bap', fiche.baptise) || '',
@@ -6038,6 +6129,60 @@ function renderEvFicheCard(f) {
       + '</div>'
     : '';
 
+  const notePriveeBlock = f.notePrivee
+    ? '<div style="background:rgba(184,106,0,0.06);border:1px solid rgba(184,106,0,0.25);border-radius:8px;padding:8px 10px;margin-bottom:10px;">'
+      + '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);margin-bottom:2px;">Message du responsable</div>'
+      + '<div style="font-size:13px;color:var(--tx);white-space:pre-wrap;">' + crEscapeHtml(f.notePrivee) + '</div>'
+      + '</div>'
+    : '';
+
+  // --- DEMANDES DE MODIFICATION (proposées par cet évangéliste) ---
+  const statutLabelsDMev = {
+    nouveau:'Nouveau', ancien:'Ancien', commission:'En commission',
+    perdu_de_vue:'Perdu de vue', depart_definitif:'Départ définitif'
+  };
+  const mesDemandesModif = (f.demandesModif || [])
+    .filter(function(d){ return d.evangelisteId === S.evId; })
+    .slice().sort(function(a,b){ return new Date(b.date||0) - new Date(a.date||0); });
+  const demandesModifListHtml = mesDemandesModif.length
+    ? mesDemandesModif.map(function(d) {
+        const badge = d.statut === 'validee'
+          ? '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(26,122,58,0.12);color:var(--ok);">Validée</span>'
+          : d.statut === 'refusee'
+          ? '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(192,57,43,0.10);color:var(--c3);">Refusée</span>'
+          : '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(184,106,0,0.10);color:var(--wa);">En attente</span>';
+        const detail = d.statutPropose
+          ? '<div style="font-size:12px;color:var(--tx);margin-top:3px;">Nouveau statut proposé : ' + (statutLabelsDMev[d.statutPropose] || d.statutPropose) + (d.statutPrecisionPropose ? ' — ' + crEscapeHtml(d.statutPrecisionPropose) : '') + '</div>'
+          : '';
+        const msg = d.message ? '<div style="font-size:12px;color:var(--tx);margin-top:3px;">' + crEscapeHtml(d.message) + '</div>' : '';
+        return '<div style="border-bottom:1px solid var(--bo);padding:7px 0;">'
+          + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+          + '<span style="font-size:11px;color:var(--mu);">' + (d.date ? new Date(d.date).toLocaleDateString('fr-FR') : '—') + '</span>'
+          + badge
+          + '</div>'
+          + detail + msg
+          + '</div>';
+      }).join('')
+    : '';
+
+  const demandeModifBlock = '<div style="margin-top:10px;">'
+    + '<button type="button" class="btn btn-outline btn-sm" style="width:100%;" onclick="event.stopPropagation();toggleDemandeModifForm(\'' + f.id + '\')">Proposer une modification</button>'
+    + '<div id="dm-form-' + f.id + '" style="display:none;flex-direction:column;gap:8px;margin-top:8px;padding:10px;background:var(--bg2);border-radius:8px;" onclick="event.stopPropagation()">'
+    + '<div class="field"><label>Nouveau statut (facultatif)</label>'
+    + '<select id="dm-statut-' + f.id + '" onchange="onDemandeStatutChange(\'' + f.id + '\')" style="-webkit-appearance:none;appearance:none;background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:\'DM Sans\',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);">'
+    + '<option value="">— Ne pas modifier —</option>'
+    + Object.keys(statutLabelsDMev).map(function(k){ return '<option value="' + k + '">' + statutLabelsDMev[k] + '</option>'; }).join('')
+    + '</select></div>'
+    + '<div class="field" id="dm-precision-wrap-' + f.id + '" style="display:none;"><label>Précision</label>'
+    + '<input type="text" id="dm-precision-' + f.id + '" placeholder="ex: depuis mars 2024, département Chorale…" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:\'DM Sans\',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);"></div>'
+    + '<div class="field"><label>Informations à corriger (facultatif)</label>'
+    + '<textarea id="dm-message-' + f.id + '" placeholder="ex: le numéro de téléphone a changé, l\'adresse est incorrecte…" style="min-height:60px;resize:vertical;background:var(--surface);border:1.5px solid var(--bo);border-radius:8px;padding:9px 11px;font-family:\'DM Sans\',sans-serif;font-size:13px;outline:none;width:100%;color:var(--tx);"></textarea></div>'
+    + '<button type="button" class="btn btn-primary btn-sm" onclick="envoyerDemandeModif(\'' + f.id + '\')">Envoyer la demande</button>'
+    + '<div style="font-size:10px;color:var(--mu);">Cette demande sera transmise au responsable, qui reste seul habilité à valider et appliquer les changements.</div>'
+    + '</div>'
+    + (demandesModifListHtml ? '<div style="margin-top:10px;"><div class="obs-history-title">Mes demandes (' + mesDemandesModif.length + ')</div>' + demandesModifListHtml + '</div>' : '')
+    + '</div>';
+
   const obs = f.observations || [];
   const obsHtml = obs.length
     ? obs.map(function(o) {
@@ -6076,7 +6221,8 @@ function renderEvFicheCard(f) {
     : '<p style="font-size:12px;color:var(--mu);font-style:italic;padding:4px 0;">Aucune action accomplie.</p>';
 
   const panelInfo = '<div id="evpanel-info-' + f.id + '">'
-    + infoGrid + statutBlock + raisonBlock
+    + infoGrid + statutBlock + notePriveeBlock + raisonBlock
+    + demandeModifBlock
     + '<div style="margin-top:6px;">'
     + '<div class="obs-history-title">Historique des visites (' + obs.length + ')</div>'
     + obsHtml
@@ -6212,6 +6358,50 @@ function switchEvFicheTab(ficheId, tab, btn) {
   if (tab === 'act') loadEvFicheHistory(ficheId);
 }
 
+/* ── DEMANDE DE MODIFICATION (proposée par l'évangéliste) ── */
+function toggleDemandeModifForm(ficheId) {
+  const el = document.getElementById('dm-form-' + ficheId);
+  if (!el) return;
+  el.style.display = (el.style.display === 'none' || !el.style.display) ? 'flex' : 'none';
+}
+
+function onDemandeStatutChange(ficheId) {
+  const sel = document.getElementById('dm-statut-' + ficheId);
+  const wrap = document.getElementById('dm-precision-wrap-' + ficheId);
+  if (!sel || !wrap) return;
+  wrap.style.display = ['ancien','commission'].includes(sel.value) ? 'flex' : 'none';
+}
+
+async function envoyerDemandeModif(ficheId) {
+  const statutSel  = document.getElementById('dm-statut-' + ficheId)?.value || '';
+  const precision  = document.getElementById('dm-precision-' + ficheId)?.value?.trim() || '';
+  const message    = document.getElementById('dm-message-' + ficheId)?.value?.trim() || '';
+  if (!statutSel && !message) return toast('⚠️ Indiquez un changement de statut ou un message');
+  const demande = {
+    id: 'dm_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    evangelisteId: S.evId,
+    evangelisteNom: S.evNom || whoAmI(),
+    statutPropose: statutSel || null,
+    statutPrecisionPropose: statutSel ? (precision || null) : null,
+    message: message || null,
+    statut: 'en_attente',
+    date: new Date().toISOString()
+  };
+  try {
+    await db.collection('fiches').doc(ficheId).update({
+      demandesModif: firebase.firestore.FieldValue.arrayUnion(demande)
+    });
+    toast('✅ Demande envoyée au responsable');
+    const selEl = document.getElementById('dm-statut-' + ficheId);
+    const precEl = document.getElementById('dm-precision-' + ficheId);
+    const msgEl = document.getElementById('dm-message-' + ficheId);
+    if (selEl) selEl.value = '';
+    if (precEl) precEl.value = '';
+    if (msgEl) msgEl.value = '';
+    toggleDemandeModifForm(ficheId);
+  } catch(e) { toast('❌ Erreur envoi'); }
+}
+
 /* ════════════════════════════════════════════════════════════
    SORTIES D'ÉVANGÉLISATION
 ════════════════════════════════════════════════════════════ */
@@ -6260,10 +6450,13 @@ async function creerSortieCollective() {
 Une belle occasion de servir ensemble se prépare ! 🙌
 
 On se retrouve pour une sortie collective :
+
 📍 ${lieu}
 📅 ${dateLabel}
 ${desc ? '📝 ' + desc + '\n' : ''}
-On compte sur votre présence pour vivre ce moment à plusieurs — dites-nous vite si vous êtes des nôtres en répondant directement dans l'app (onglet Agenda) : « Je viens » ou « Je ne peux pas ».
+Ce sera une joie de vivre ce moment ensemble, dans la simplicité et la fraternité. 🙏
+
+Merci de confirmer dès maintenant dans l'app (onglet Agenda) : « Je viens » ou « Je ne peux pas ».
 
 Avec joie et fraternité,
 Commission Témoignage — EEAM Fès`;
@@ -7437,85 +7630,120 @@ function switchTab(name, btn) {
   if (name === 'communications') { initCommunications(); }
 }
 
-/* ── VUE ÉQUIPES PAR QUARTIER ─────────────────────────────── */
+/* ── Normalisation / regroupement des quartiers ────────────────
+   Objectif : que deux écritures proches d'un même quartier (faute
+   de frappe, variante d'accent, ordre des mots...) soient TOUJOURS
+   reconnues comme UN SEUL quartier, sans jamais afficher de message
+   à l'utilisateur. Le libellé "canonique" retenu pour l'affichage
+   est la variante la plus fréquemment saisie (à égalité : la plus
+   courte, puis l'ordre alphabétique).
+────────────────────────────────────────────────────────── */
+function _levenshtein(a, b) {
+  if (a === b) return 0;
+  const al = a.length, bl = b.length;
+  if (!al) return bl;
+  if (!bl) return al;
+  let prev = new Array(bl + 1);
+  for (let j = 0; j <= bl; j++) prev[j] = j;
+  for (let i = 1; i <= al; i++) {
+    const cur = [i];
+    for (let j = 1; j <= bl; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = cur;
+  }
+  return prev[bl];
+}
+
+// a et b doivent déjà être passés dans normalizeStr()
+function _quartierSimilar(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  // Comparaison par mots triés : absorbe les inversions d'ordre
+  // ("Rouadi Sebaa" / "Sebaa Rouadi") et petites variantes de ponctuation.
+  const ta = a.split(/[\s\-,]+/).filter(Boolean).sort().join(' ');
+  const tb = b.split(/[\s\-,]+/).filter(Boolean).sort().join(' ');
+  if (ta === tb) return true;
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen < 4) return false; // trop court pour un rapprochement fiable
+  const dist = _levenshtein(a, b);
+  const seuil = maxLen <= 6 ? 1 : Math.round(maxLen * 0.22);
+  return dist <= seuil;
+}
+
+/* Construit l'index normalizeStr(variante) -> libellé canonique,
+   à partir de l'ensemble des quartiers effectivement saisis dans les fiches. */
+function buildQuartierIndex(fiches) {
+  // 1) Regrouper d'abord les variantes strictement identiques une fois
+  //    normalisées (accents/majuscules), pour un décompte fiable par
+  //    "famille d'écriture", et retenir sa graphie la plus fréquente.
+  const familles = new Map(); // normKey -> { count, surfaces: Map(surface->count) }
+  (fiches || []).forEach(f => {
+    const raw = (f.quartier || '').trim().replace(/\s+/g, ' ');
+    if (!raw) return;
+    const key = normalizeStr(raw);
+    if (!familles.has(key)) familles.set(key, { count: 0, surfaces: new Map() });
+    const fam = familles.get(key);
+    fam.count++;
+    fam.surfaces.set(raw, (fam.surfaces.get(raw) || 0) + 1);
+  });
+  const groupes = [...familles.entries()].map(([key, fam]) => {
+    const bestSurface = [...fam.surfaces.entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0][0];
+    return { key, count: fam.count, surface: bestSurface };
+  }).sort((a, b) => b.count - a.count || a.surface.length - b.surface.length || a.surface.localeCompare(b.surface, 'fr'));
+
+  // 2) Fusion floue entre familles (fautes de frappe, ordre des mots…) :
+  //    la famille la plus fréquente de chaque cluster devient la référence.
+  const clusters = []; // { canon, members:[normKey...] }
+  groupes.forEach(g => {
+    const cluster = clusters.find(c => c.members.some(m => _quartierSimilar(g.key, m)));
+    if (cluster) cluster.members.push(g.key);
+    else clusters.push({ canon: g.surface, members: [g.key] });
+  });
+  const index = new Map();
+  clusters.forEach(c => c.members.forEach(m => index.set(m, c.canon)));
+  return index;
+}
+
+/* Retourne le libellé canonique d'un quartier saisi, à partir d'un index
+   déjà construit via buildQuartierIndex(). Aucun message n'est affiché :
+   la correction est totalement silencieuse. */
+function canonicalQuartier(raw, index) {
+  const cleaned = (raw || '').trim().replace(/\s+/g, ' ');
+  if (!cleaned) return '';
+  if (!index) return cleaned;
+  return index.get(normalizeStr(cleaned)) || cleaned;
+}
+
+/* ── VUE ÉQUIPES PAR QUARTIER — 2 sections : Nouvelles fiches / Fiches confiées ── */
 function renderEquipes() {
-  // Mémoriser l'état du panneau zones avant de reconstruire le DOM
+  // Mémoriser l'état du panneau "Gérer" avant de reconstruire le DOM
   const zonesOpen = document.getElementById('zones-manager-body')?.style.display === 'block';
   const fiches = getFiches();
   const evActifs = S.evs.filter(e => e.actif);
-  // Zones dynamiques depuis Firebase + fallback par défaut
-  const EQUIPES = (S.zones && S.zones.length) ? S.zones.map(z => z.nom) : ['Euromed', 'Sebaa Rouadi', 'Chaima', 'Bensouda', 'Lido', 'Atlas', 'Mont Fleuri', 'Narjiss'];
-  const ZONE_COLORS = [
-    { bg: 'rgba(30,80,200,0.07)',  border: 'rgba(30,80,200,0.22)',  color: '#1E50C8', dot: '#1E50C8', icon: '🏘️' },
-    { bg: 'rgba(130,60,0,0.07)',   border: 'rgba(130,60,0,0.22)',   color: '#823C00', dot: '#823C00', icon: '🏘️' },
-    { bg: 'rgba(26,122,58,0.07)',  border: 'rgba(26,122,58,0.22)',  color: '#1A7A3A', dot: '#1A7A3A', icon: '🏘️' },
-    { bg: 'rgba(123,17,17,0.07)', border: 'rgba(123,17,17,0.22)', color: '#7B1111', dot: '#7B1111', icon: '🏘️' },
-    { bg: 'rgba(80,30,160,0.07)', border: 'rgba(80,30,160,0.22)', color: '#501EA0', dot: '#501EA0', icon: '🏘️' },
-    { bg: 'rgba(0,120,120,0.07)', border: 'rgba(0,120,120,0.22)', color: '#007878', dot: '#007878', icon: '🏘️' },
-    { bg: 'rgba(180,80,0,0.07)',  border: 'rgba(180,80,0,0.22)',  color: '#B45000', dot: '#B45000', icon: '🏘️' },
-    { bg: 'rgba(100,100,100,0.07)',border: 'rgba(100,100,100,0.2)', color: '#555', dot: '#555', icon: '🏘️' },
-  ];
-  const equipeColors = {};
-  EQUIPES.forEach((eq, i) => {
-    const zoneObj = S.zones ? S.zones.find(z => z.nom === eq) : null;
-    const palette = ZONE_COLORS[i % ZONE_COLORS.length];
-    equipeColors[eq] = { ...palette, icon: (zoneObj && zoneObj.icon) ? zoneObj.icon : palette.icon };
-  });
 
-  // ── Tri des fiches :
-  // Une fiche va dans une zone SI son quartier est mappé à une zone
-  // Sinon elle va dans "non attribués"
-  // Une fiche sans évangéliste (evangelisteId vide) dans une zone reste dans la zone (colonne "Non confiés")
-  // mais si elle n'a PAS de zone → elle va aussi dans non attribués
-  const ficheIdsInZone = new Set();
+  // Index de normalisation des quartiers (fautes de frappe / variantes fusionnées)
+  const qIndex = buildQuartierIndex(fiches);
 
-  // Initialiser fichesByEquipe pour chaque équipe
-  const fichesByEquipe = {};
-  EQUIPES.forEach(eq => { fichesByEquipe[eq] = []; });
-
-  fiches.forEach(f => {
-    const eq = getEquipeForQuartier(f.quartier);
-    if (eq) {
-      fichesByEquipe[eq].push(f);
-      ficheIdsInZone.add(f.id);
+  // Helper : nom(s) de l'évangéliste responsable d'un quartier
+  function evNomsPourQuartier(quartierCanon, fichesDuQuartier, aDejaEvangeliste) {
+    if (aDejaEvangeliste) {
+      const ids = [...new Set(fichesDuQuartier.map(f => f.evangelisteId).filter(Boolean))];
+      const noms = ids.map(id => (S.evs.find(e => e.id === id) || {}).nom).filter(Boolean);
+      return noms.join(', ') || null;
     }
-  });
+    const zoneNom = getEquipeForQuartier(quartierCanon);
+    if (!zoneNom) return null;
+    const noms = evActifs.filter(e => e.equipe === zoneNom).map(e => e.nom);
+    return noms.join(', ') || null;
+  }
 
-  // Fiches sans équipe = pas de zone mappée (pas de doublon possible)
-  const fichesSansEquipe = fiches.filter(f => !ficheIdsInZone.has(f.id));
-
-  const el = document.getElementById('equipes-vue');
-  if (!el) return;
-
-  // Panneau de gestion des zones
-  const zonesManagerHtml = `
-  <div style="background:var(--surface);border:1.5px solid var(--bo);border-radius:14px;margin-bottom:18px;overflow:hidden;">
-    <div style="padding:12px 16px;background:var(--bg2);border-bottom:1px solid var(--bo);display:flex;align-items:center;justify-content:space-between;">
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--c1);">⚙️ Gestion des zones</div>
-      <button onclick="toggleZonesManager()" id="zones-manager-toggle" style="background:none;border:none;font-size:12px;color:var(--mu);cursor:pointer;font-weight:600;">Gérer ▾</button>
-    </div>
-    <div id="zones-manager-body" style="display:none;padding:14px;">
-      <div style="font-size:12px;color:var(--mu);margin-bottom:10px;">Zones actuelles : définissez les quartiers couverts par chaque zone. Un évangéliste est assigné à une zone dans son profil.</div>
-      <div id="quartiers-non-reconnus" style="margin-bottom:12px;"></div>
-      <div id="zones-list-manage" style="margin-bottom:12px;"></div>
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mu);margin-bottom:6px;">Nouvelle zone</div>
-      <div style="display:flex;gap:8px;margin-bottom:6px;">
-        <input type="text" id="new-zone-nom" placeholder="Nom de la zone (ex: Agdal)" style="flex:1;background:var(--bg2);border:1.5px solid var(--bo);border-radius:8px;padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
-        <input type="text" id="new-zone-icon" placeholder="🏘️" style="width:52px;background:var(--bg2);border:1.5px solid var(--bo);border-radius:8px;padding:8px 10px;font-size:16px;text-align:center;outline:none;">
-        <button onclick="addZone()" class="btn btn-primary btn-sm">+ Ajouter</button>
-      </div>
-      <input type="text" id="new-zone-quartiers" placeholder="Quartiers couverts (ex: Uvillage, Sebaa Rouadi, Atlas…)" style="width:100%;background:var(--bg2);border:1.5px solid var(--bo);border-radius:8px;padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
-      <div style="font-size:10px;color:var(--mu);margin-top:3px;">Séparation par virgule, insensible aux majuscules/accents</div>
-    </div>
-  </div>`;
-
+  // Helper : mini-carte fiche (réutilisée telle quelle, statut de cadence inclus)
   const today = new Date().toISOString().split('T')[0];
-
-  // Helper: fiche kanban card — le statut affiché est désormais la cadence
-  // de suivi réelle (getCadenceStatus), pas le drapeau binaire "visité".
   function ficheKanbanCard(f) {
     const ev = evActifs.find(e => e.id === f.evangelisteId);
-    const evInitials = ev ? (ev.nom||'').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase() : null;
+    const evInitials = ev ? (ev.nom || '').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase() : null;
     const cad = getCadenceStatus(f);
     let statusLine = `<div style="font-size:10px;color:${cad.color};font-weight:600;margin-top:3px;">${cad.icon} ${cad.label}</div>`;
     if (cad.key === 'retard' && f.nextActionDate) {
@@ -7523,12 +7751,11 @@ function renderEquipes() {
       statusLine = `<div style="font-size:10px;color:${cad.color};font-weight:600;margin-top:3px;">${cad.icon} ${cad.label} (${days}j)</div>`;
     } else if (f.nextAction && (cad.key === 'actif' || cad.key === 'attente_1ere')) {
       const typeIcon = f.nextAction === 'appel' ? '📞' : f.nextAction === 'visite' ? '🚶' : f.nextAction === 'message' ? '💬' : '📌';
-      const d = f.nextActionDate ? f.nextActionDate.split('-').reverse().slice(0,2).join('/') : '';
-      statusLine += `<div style="font-size:10px;color:var(--mu);margin-top:2px;">${typeIcon} ${f.nextAction}${d?' '+d:''}</div>`;
+      const d = f.nextActionDate ? f.nextActionDate.split('-').reverse().slice(0, 2).join('/') : '';
+      statusLine += `<div style="font-size:10px;color:var(--mu);margin-top:2px;">${typeIcon} ${f.nextAction}${d ? ' ' + d : ''}</div>`;
     }
-    return `<div onclick="openFicheModal('${f.id}')" style="background:var(--surface);border:1.5px solid var(--bo);border-radius:10px;padding:10px 11px;margin-bottom:7px;cursor:pointer;transition:box-shadow .15s;" onmouseenter="this.style.boxShadow='0 2px 12px rgba(0,0,0,0.10)'" onmouseleave="this.style.boxShadow=''">
-      <div style="font-size:12px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${(f.nom||'—').toUpperCase()}</div>
-      ${f.quartier ? `<div style="font-size:10px;color:var(--mu);margin-top:1px;">📍 ${f.quartier}</div>` : '<div style="font-size:10px;color:#C0392B;margin-top:1px;">📍 Quartier non renseigné</div>'}
+    return `<div onclick="openFicheModal('${f.id}')" style="background:var(--bg2);border:1.5px solid var(--bo);border-radius:10px;padding:10px 11px;cursor:pointer;transition:box-shadow .15s;" onmouseenter="this.style.boxShadow='0 2px 12px rgba(0,0,0,0.10)'" onmouseleave="this.style.boxShadow=''">
+      <div style="font-size:12px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${(f.nom || '—').toUpperCase()}</div>
       ${statusLine}
       <div style="display:flex;align-items:center;gap:4px;margin-top:6px;">
         ${evInitials ? `<span style="margin-left:auto;width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--c1),var(--c3));color:#fff;font-size:8px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${evInitials}</span>` : `<span style="margin-left:auto;font-size:9px;color:#C0392B;font-weight:700;">Non assigné</span>`}
@@ -7536,144 +7763,84 @@ function renderEquipes() {
     </div>`;
   }
 
-  // ── Compteur global "fiches sans évangéliste", toutes zones confondues ──
-  // Distinct du problème de zone/quartier (bloc "non attribués" plus bas) :
-  // ici on regroupe uniquement le manque d'évangéliste, pour ne rien dupliquer
-  // avec le statut "🆕 Non confié" déjà visible dans chaque zone.
-  const fichesSansEv = fiches.filter(f => !f.evangelisteId);
-  const globalSansEvHtml = fichesSansEv.length ? `
-  <div style="background:var(--surface);border:1.5px solid rgba(192,57,43,0.3);border-radius:14px;margin-bottom:14px;overflow:hidden;">
-    <div onclick="toggleFichesSansEvGlobal()" id="fiches-sans-ev-toggle-header" style="padding:12px 16px;background:rgba(192,57,43,0.06);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;">
-      <span style="font-size:12px;font-weight:700;color:#C0392B;">🔴 ${fichesSansEv.length} fiche${fichesSansEv.length!==1?'s':''} sans évangéliste <span style="font-weight:400;color:var(--mu);">(toutes zones confondues)</span></span>
-      <span id="fiches-sans-ev-arrow" style="font-size:12px;color:var(--mu);">▶</span>
-    </div>
-    <div id="fiches-sans-ev-body" style="display:none;padding:10px;">
-      ${fichesSansEv.map(f => ficheKanbanCard(f)).join('')}
-    </div>
-  </div>` : '';
-
-  // ── Rendu zones uniquement dans equipes-vue ──
-  el.innerHTML = globalSansEvHtml + zonesManagerHtml + EQUIPES.map(eq => {
-    const style = equipeColors[eq];
-    const fEq = fichesByEquipe[eq];
-    const evEq = evActifs.filter(e => e.equipe === eq);
-    const nbTotal = fEq.length;
-    const evNames = evEq.map(e => e.nom).join(', ') || '—';
-
-    // Groupes selon la cadence de suivi (calculée, pas stockée)
-    const cadGroups = { non_confie: [], attente_1ere: [], actif: [], relancer: [], retard: [] };
-    fEq.forEach(f => { cadGroups[getCadenceStatus(f).key].push(f); });
-
-    // ── Indicateurs géographiques de la zone ──
-    const nbConfiees = fEq.filter(f => f.evangelisteId).length;
-    const tauxPriseEnCharge = nbTotal ? Math.round((nbConfiees / nbTotal) * 100) : 0;
-    const nbVisitees = fEq.filter(f => (f.observations||[]).length > 0).length;
-    const tauxVisite = nbConfiees ? Math.round((nbVisitees / nbConfiees) * 100) : 0;
-    const nbRetards = cadGroups.retard.length;
-
-    // Charge par évangéliste actif de la zone (fiches actives = ni perdues de vue, ni départ définitif)
-    const fActives = fEq.filter(f => f.statutMembre !== 'perdu_de_vue' && f.statutMembre !== 'depart_definitif');
-    const estOrpheline = nbTotal > 0 && evEq.length === 0;
-    const charge = evEq.length ? (fActives.length / evEq.length).toFixed(1) : null;
-
-    // Ancienneté moyenne du dernier contact (jours), sur les fiches ayant au moins une observation
-    const ficheAvecObs = fEq.filter(f => (f.observations||[]).length > 0);
-    let ancienneteMoy = null;
-    if (ficheAvecObs.length) {
-      const totalJours = ficheAvecObs.reduce((acc, f) => {
-        const obsT = f.observations.slice().sort((a,b) => new Date(b.dateVisite||b.date||0) - new Date(a.dateVisite||a.date||0))[0];
-        const d = new Date(obsT.dateVisite || obsT.date || 0);
-        return acc + Math.max(0, Math.floor((new Date(today + 'T12:00:00') - d) / 86400000));
-      }, 0);
-      ancienneteMoy = Math.round(totalJours / ficheAvecObs.length);
-    }
-
-    const colStyle = (label, count, cards, colColor) => `
-      <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.035);border-radius:10px;padding:10px 8px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);">${label}</span>
-          <span style="font-size:11px;font-weight:800;color:${colColor};background:rgba(0,0,0,0.06);padding:1px 7px;border-radius:20px;">${count}</span>
-        </div>
-        ${cards.map(f => ficheKanbanCard(f)).join('') || `<div style="font-size:11px;color:var(--mu);font-style:italic;text-align:center;padding:10px 0;">—</div>`}
-      </div>`;
-
+  // Helper : carte quartier (nom en évidence + évangéliste + nombre de fiches)
+  function quartierCard(quartierCanon, fichesGroupe, aDejaEvangeliste) {
+    const nomEv = evNomsPourQuartier(quartierCanon, fichesGroupe, aDejaEvangeliste);
+    const nb = fichesGroupe.length;
+    const domId = 'qzf-' + Math.random().toString(36).slice(2, 9);
     return `
-    <div style="background:${style.bg};border:1.5px solid ${estOrpheline?'#C0392B':style.border};border-radius:14px;overflow:hidden;margin-bottom:4px;">
-      <div style="padding:12px 14px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid ${style.border};">
-        <span style="width:10px;height:10px;border-radius:50%;background:${style.dot};flex-shrink:0;display:inline-block;"></span>
-        <div style="flex:1;min-width:0;">
-          <span style="font-size:14px;font-weight:700;color:${style.color};">${eq}</span>
-          <span style="font-size:11px;color:var(--mu);margin-left:8px;">· ${nbTotal} fiche${nbTotal!==1?'s':''} · ${evNames}</span>
-          ${estOrpheline ? `<span style="font-size:10px;color:#C0392B;font-weight:700;margin-left:8px;">⚠️ Zone orpheline — aucun évangéliste actif</span>` : ''}
-        </div>
+    <div class="qz-card ${nomEv ? '' : 'qz-warn'}">
+      <div class="qz-head">
+        <div class="qz-name">📍 <span class="txt">${quartierCanon || '(Quartier non renseigné)'}</span></div>
+        <div class="qz-count">${nb} fiche${nb !== 1 ? 's' : ''}</div>
       </div>
-      <div style="padding:9px 14px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;border-bottom:1px solid ${style.border};background:rgba(255,255,255,0.35);">
-        <div style="flex:1;min-width:140px;">
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mu);margin-bottom:3px;"><span>Prise en charge</span><span style="font-weight:700;color:${style.color};">${tauxPriseEnCharge}%</span></div>
-          <div style="height:5px;border-radius:3px;background:rgba(0,0,0,0.08);overflow:hidden;"><div style="height:100%;width:${tauxPriseEnCharge}%;background:${style.color};"></div></div>
-        </div>
-        <div style="flex:1;min-width:140px;">
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mu);margin-bottom:3px;"><span>Taux de visite</span><span style="font-weight:700;color:${style.color};">${tauxVisite}%</span></div>
-          <div style="height:5px;border-radius:3px;background:rgba(0,0,0,0.08);overflow:hidden;"><div style="height:100%;width:${tauxVisite}%;background:${style.color};"></div></div>
-        </div>
-        <div style="font-size:11px;font-weight:700;color:${nbRetards?'#C0392B':'var(--mu)'};white-space:nowrap;">⚠ ${nbRetards} retard${nbRetards!==1?'s':''}</div>
-        <div style="font-size:11px;font-weight:700;color:var(--mu);white-space:nowrap;">👤 ${charge===null?'—':charge+' fiches/évang.'}</div>
-        <div style="font-size:11px;font-weight:700;color:var(--mu);white-space:nowrap;">🕓 ${ancienneteMoy===null?'—':ancienneteMoy+' j depuis dernier contact (moy.)'}</div>
-      </div>
-      <div style="padding:10px 10px 12px;display:flex;flex-wrap:wrap;gap:8px;">
-        ${colStyle('🆕 Non confiés', cadGroups.non_confie.length, cadGroups.non_confie, '#C0392B')}
-        ${colStyle('📋 1ère visite en attente', cadGroups.attente_1ere.length, cadGroups.attente_1ere, '#B86A00')}
-        ${colStyle('🔄 Suivi actif', cadGroups.actif.length, cadGroups.actif, '#1A7A3A')}
-        ${colStyle('⏳ À relancer', cadGroups.relancer.length, cadGroups.relancer, '#B86A00')}
-        ${colStyle('⚠️ En retard', cadGroups.retard.length, cadGroups.retard, '#C0392B')}
+      <div class="qz-ev ${nomEv ? '' : 'qz-unassigned'}">${nomEv ? '👤 ' + nomEv : '⚠️ Aucun évangéliste attribué'}</div>
+      <button class="qz-toggle" onclick="const el=document.getElementById('${domId}');const v=el.style.display!=='none';el.style.display=v?'none':'flex';this.textContent=v?'Voir les fiches ▾':'Masquer ▴';">Voir les fiches ▾</button>
+      <div id="${domId}" class="qz-fiches" style="display:none;margin-top:8px;">
+        ${fichesGroupe.map(f => ficheKanbanCard(f)).join('')}
       </div>
     </div>`;
-  }).join('');
+  }
 
-  // ── Quartiers non attribués (card séparé) ──
-  const elNA = document.getElementById('equipes-non-attrib');
-  if (elNA) {
-    if (!fichesSansEquipe.length) {
-      // Tout est assigné → juste ✅
-      elNA.innerHTML = '<div style="text-align:center;font-size:28px;padding:10px 0;">✅</div>';
+  // Regroupement par quartier canonique, séparé Nouvelles / Confiées
+  function groupByQuartier(list) {
+    const groups = new Map();
+    list.forEach(f => {
+      const canon = canonicalQuartier(f.quartier, qIndex) || '(Quartier non renseigné)';
+      if (!groups.has(canon)) groups.set(canon, []);
+      groups.get(canon).push(f);
+    });
+    return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'fr', { sensitivity: 'base' }));
+  }
+
+  const fichesNouvelles = fiches.filter(f => !f.evangelisteId);
+  const fichesConfiees  = fiches.filter(f => !!f.evangelisteId);
+
+  const groupesNouvelles = groupByQuartier(fichesNouvelles);
+  const groupesConfiees  = groupByQuartier(fichesConfiees);
+
+  const elNouv = document.getElementById('equipes-nouvelles');
+  const elConf = document.getElementById('equipes-confiees');
+
+  if (elNouv) {
+    elNouv.innerHTML = groupesNouvelles.length
+      ? groupesNouvelles.map(([q, list]) => quartierCard(q, list, false)).join('')
+      : '<div class="empty-state"><div class="ico">✅</div><p>Aucune nouvelle fiche en attente</p></div>';
+  }
+  if (elConf) {
+    elConf.innerHTML = groupesConfiees.length
+      ? groupesConfiees.map(([q, list]) => quartierCard(q, list, true)).join('')
+      : '<div class="empty-state"><div class="ico">📭</div><p>Aucune fiche confiée pour le moment</p></div>';
+  }
+
+  // ── Bandeau utile : quartiers (parmi les nouvelles fiches) sans évangéliste attribué ──
+  const elAlert = document.getElementById('equipes-alert-bar');
+  if (elAlert) {
+    const quartiersSansEv = groupesNouvelles
+      .filter(([q]) => !getEquipeForQuartier(q))
+      .map(([q, list]) => ({ q, n: list.length }));
+    if (quartiersSansEv.length) {
+      const totalFiches = quartiersSansEv.reduce((acc, x) => acc + x.n, 0);
+      elAlert.innerHTML = `
+      <div style="background:rgba(192,57,43,0.06);border:1.5px solid rgba(192,57,43,0.25);border-radius:12px;padding:11px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:13px;">⚠️</span>
+        <span style="font-size:12.5px;font-weight:700;color:#C0392B;">${quartiersSansEv.length} quartier${quartiersSansEv.length !== 1 ? 's' : ''} sans évangéliste attribué</span>
+        <span style="font-size:11.5px;color:var(--mu);">(${totalFiches} fiche${totalFiches !== 1 ? 's' : ''} concernée${totalFiches !== 1 ? 's' : ''}) — ${quartiersSansEv.slice(0, 6).map(x => x.q).join(', ')}${quartiersSansEv.length > 6 ? '…' : ''}</span>
+      </div>`;
     } else {
-      // Grouper par quartier (sans doublons)
-      const parQuartier = {};
-      fichesSansEquipe.forEach(f => {
-        const q = f.quartier || '(Quartier non renseigné)';
-        if (!parQuartier[q]) parQuartier[q] = [];
-        parQuartier[q].push(f);
-      });
-      const quartiersTriés = Object.keys(parQuartier).sort();
-
-      elNA.innerHTML = `
-        <p style="font-size:12px;color:var(--mu);margin-bottom:12px;">
-          ${fichesSansEquipe.length} fiche${fichesSansEquipe.length>1?'s':''} dont le quartier est vide ou ne correspond à aucune zone créée — complétez la fiche ou ajoutez ce quartier dans une zone ci-dessus.
-        </p>
-        ${quartiersTriés.map(q => `
-          <div style="margin-bottom:12px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(123,17,17,0.06);border-radius:8px 8px 0 0;border:1px solid rgba(123,17,17,0.15);border-bottom:none;">
-              <span style="font-size:11px;font-weight:700;color:var(--c1);">📍 ${q}</span>
-              <span style="font-size:11px;font-weight:800;color:var(--c1);">${parQuartier[q].length} fiche${parQuartier[q].length>1?'s':''}</span>
-            </div>
-            <div style="padding:8px;background:var(--bg2);border-radius:0 0 8px 8px;border:1px solid rgba(123,17,17,0.15);border-top:none;">
-              ${parQuartier[q].map(f => ficheKanbanCard(f)).join('')}
-            </div>
-          </div>
-        `).join('')}`;
+      elAlert.innerHTML = '';
     }
   }
 
-  // Peupler les chips de zones (dynamique)
+  // Peupler les chips de gestion des équipes/zones (dynamique)
   renderZoneChips();
-  // Restaurer l'état ouvert/fermé du panneau zones
+  // Restaurer l'état ouvert/fermé du panneau de gestion
   if (zonesOpen) {
     const body = document.getElementById('zones-manager-body');
     const btn  = document.getElementById('zones-manager-toggle');
     if (body) body.style.display = 'block';
     if (btn)  btn.textContent = 'Fermer ▴';
   }
-
 }
 
 /* renderFiches et updateStats filtrent déjà les deleted inline — pas d'override nécessaire */
@@ -8210,62 +8377,94 @@ const MODELES_MESSAGES_SUIVI = {
   premier_contact: {
     label: '👋 Premier contact',
     variantes: [
-`Bonjour {prenom},
+`Bonjour {prenom}, 👋
+
 J'espère que vous allez bien.
+
 Je suis {evangeliste}, de la commission Témoignage de l'EEAM Fès.
-Je voulais simplement me présenter et prendre de vos nouvelles. Nous sommes heureux de pouvoir vous compter parmi nous et nous restons à votre disposition si vous avez besoin d'échanger, de poser une question ou simplement de discuter.
+
+Je voulais simplement me présenter et prendre de vos nouvelles. Nous sommes heureux de vous compter parmi nous, et restons à votre disposition si vous avez besoin d'échanger, de poser une question, ou simplement de discuter.
+
 N'hésitez pas à nous écrire quand vous le souhaitez.
-Au plaisir d'avoir de vos nouvelles.
-Que Dieu vous bénisse.`,
-`Bonjour {prenom},
+
+Que Dieu vous bénisse. 🙏`,
+`Bonjour {prenom}, 👋
+
 J'espère que vous allez bien.
+
 Je m'appelle {evangeliste}, je fais partie de la commission Témoignage de l'EEAM Fès.
-Je tenais simplement à me présenter et à prendre contact avec vous. N'hésitez pas à nous écrire si vous avez une question, besoin d'échanger, ou tout simplement pour discuter, nous serons heureux de vous répondre.
+
+Je tenais simplement à me présenter et à prendre contact avec vous. N'hésitez pas à nous écrire si vous avez une question, besoin d'échanger, ou tout simplement pour discuter — nous serons heureux de vous répondre.
+
 Au plaisir de vous lire.
-Que Dieu vous bénisse.`
+
+Que Dieu vous bénisse. 🙏`
     ]
   },
   prise_nouvelles: {
     label: '🙂 Prise de nouvelles',
     variantes: [
-`Bonjour {prenom},
+`Bonjour {prenom}, 😊
+
 J'espère que vous allez bien.
-C'est {evangeliste} de la commission Témoignage de l'EEAM Fès.
+
+C'est {evangeliste}, de la commission Témoignage de l'EEAM Fès.
+
 Je voulais simplement prendre de vos nouvelles et savoir comment vous allez. J'espère que tout se passe bien pour vous.
+
 Au plaisir d'avoir de vos nouvelles.
-Que Dieu vous bénisse.`,
-`Bonjour {prenom},
+
+Que Dieu vous bénisse. 🙏`,
+`Bonjour {prenom}, 😊
+
 J'espère que vous allez bien de votre côté.
+
 C'est {evangeliste}, je passe simplement prendre de vos nouvelles.
+
 N'hésitez pas à me dire comment vous allez, ça me ferait plaisir d'avoir de vos nouvelles.
-Que Dieu vous bénisse.`
+
+Que Dieu vous bénisse. 🙏`
     ]
   },
   demande_dispo: {
     label: '📅 Demande de disponibilité',
     variantes: [
-`Bonjour {prenom},
+`Bonjour {prenom}, 🙏
+
 J'espère que vous allez bien.
+
 Nous aimerions passer vous rendre visite afin de partager un moment avec vous. Seriez-vous disponible dans les prochains jours ?
+
 Faites-nous savoir le moment qui vous conviendrait le mieux.
+
 Que Dieu vous bénisse.`,
-`Bonjour {prenom},
+`Bonjour {prenom}, 🙏
+
 J'espère que vous allez bien.
+
 Ça nous ferait plaisir de venir vous rendre visite prochainement, pour partager un moment ensemble.
+
 Dites-moi simplement quand vous seriez disponible, on s'organise selon ce qui vous arrange le mieux.
+
 Que Dieu vous bénisse.`
     ]
   },
   apres_visite: {
     label: '🙏 Message après visite',
     variantes: [
-`Bonjour {prenom},
+`Bonjour {prenom}, 🙏
+
 Merci encore pour votre accueil. Nous avons été heureux de partager ce moment avec vous.
-Nous espérons que cette visite vous a fait du bien et nous restons à votre disposition si vous avez besoin d'échanger.
+
+Nous espérons que cette visite vous a fait du bien, et nous restons à votre disposition si vous avez besoin d'échanger.
+
 Que le Seigneur vous accompagne et vous bénisse abondamment.`,
-`Bonjour {prenom},
+`Bonjour {prenom}, 🙏
+
 Merci beaucoup pour votre accueil, ce moment passé ensemble nous a fait plaisir.
+
 N'hésitez pas à nous recontacter si vous avez besoin de quoi que ce soit, ou simplement envie d'échanger.
+
 Que le Seigneur vous bénisse et vous accompagne.`
     ]
   }
@@ -9815,6 +10014,48 @@ async function doStatutOnly() {
     toast('✅ Statut : ' + (labels[statut]||statut));
     closeModal('modal-fiche');
   } catch(e) { toast('❌ Erreur statut'); }
+}
+
+/* ── DEMANDES DE MODIFICATION (proposées par un évangéliste) ── */
+async function validerDemandeModif(ficheId, demandeId) {
+  const fiche = S.fiches.find(f => f.id === ficheId);
+  const demandes = fiche?.demandesModif || [];
+  const demande = demandes.find(d => d.id === demandeId);
+  if (!demande) return toast('⚠️ Demande introuvable');
+  try {
+    const upd = {};
+    if (demande.statutPropose) {
+      const oldStatutMembre = fiche.statutMembre || '';
+      upd.statutMembre = demande.statutPropose;
+      upd.statutMembrePrecision = demande.statutPrecisionPropose || null;
+      if (demande.statutPropose !== oldStatutMembre) {
+        upd.statutHistory = firebase.firestore.FieldValue.arrayUnion({
+          de: oldStatutMembre || 'non défini', vers: demande.statutPropose, par: whoAmI(), date: new Date().toISOString(),
+          note: 'Proposé par ' + (demande.evangelisteNom || 'évangéliste')
+        });
+      }
+    }
+    upd.demandesModif = demandes.map(d => d.id === demandeId
+      ? { ...d, statut: 'validee', traitePar: whoAmI(), dateTraitement: new Date().toISOString() }
+      : d);
+    await db.collection('fiches').doc(ficheId).update(upd);
+    toast('✅ Demande validée');
+    closeModal('modal-fiche');
+  } catch(e) { toast('❌ Erreur validation'); }
+}
+
+async function refuserDemandeModif(ficheId, demandeId) {
+  const fiche = S.fiches.find(f => f.id === ficheId);
+  const demandes = fiche?.demandesModif || [];
+  if (!demandes.find(d => d.id === demandeId)) return toast('⚠️ Demande introuvable');
+  try {
+    const newDemandes = demandes.map(d => d.id === demandeId
+      ? { ...d, statut: 'refusee', traitePar: whoAmI(), dateTraitement: new Date().toISOString() }
+      : d);
+    await db.collection('fiches').doc(ficheId).update({ demandesModif: newDemandes });
+    toast('Demande refusée');
+    closeModal('modal-fiche');
+  } catch(e) { toast('❌ Erreur'); }
 }
 
 /* ── VALIDER (Confier + Statut en un seul bouton) ────────── */
